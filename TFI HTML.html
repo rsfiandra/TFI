@@ -7,7 +7,17 @@
   <title>TFI Mobile Inspector</title>
   <meta name="theme-color" content="#ff8a00" />
   <meta name="color-scheme" content="light" />
-  <!-- Inline utility styles replace the former CDN dependencies so the page works offline. -->
+  <!-- Local copies of external libraries -->
+  <!-- The original HTML pulled Tailwind, React, React‑DOM and html2pdf from remote CDNs.  Those
+       references have been replaced with local files saved alongside this document.  See
+       tailwind_3.4.10.js, react.production.min.js, react-dom.production.min.js and
+       html2pdf.bundle.min.js in this folder. -->
+  <!--
+    Removed the preconnect hint to unpkg.com because scripts are now loaded from the local
+    filesystem.  Leaving the preconnect around would have no effect since the resource
+    doesn’t need a network connection.
+  -->
+  <script src="tailwind_3.4.10.js"></script>
   <style>
     :root { color-scheme: light; }
     body { background:#f8fafc; }
@@ -26,136 +36,6 @@
     .btn-fill { color:#fff; border:0; box-shadow:0 4px 12px rgba(0,0,0,.12); }
     .btn-outline { background:#fff; }
 
-    /* Utility classes (Tailwind-inspired subset) */
-    .min-h-screen{min-height:100vh;}
-    .flex{display:flex;}
-    .flex-col{flex-direction:column;}
-    .flex-1{flex:1 1 auto;}
-    .flex-wrap{flex-wrap:wrap;}
-    .items-center{align-items:center;}
-    .items-start{align-items:flex-start;}
-    .justify-between{justify-content:space-between;}
-    .justify-center{justify-content:center;}
-    .gap-1{gap:0.25rem;}
-    .gap-2{gap:0.5rem;}
-    .gap-3{gap:0.75rem;}
-    .gap-4{gap:1rem;}
-    .grid{display:grid;}
-    .grid-cols-1{grid-template-columns:repeat(1,minmax(0,1fr));}
-    .grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr));}
-    .w-full{width:100%;}
-    .w-auto{width:auto;}
-    .w-px{width:1px;}
-    .w-4{width:1rem;}
-    .w-5{width:1.25rem;}
-    .w-6{width:1.5rem;}
-    .h-1{height:0.25rem;}
-    .h-3{height:0.75rem;}
-    .h-4{height:1rem;}
-    .h-5{height:1.25rem;}
-    .h-6{height:1.5rem;}
-    .h-8{height:2rem;}
-    .h-16{height:4rem;}
-    .h-24{height:6rem;}
-    .rounded{border-radius:0.25rem;}
-    .rounded-md{border-radius:0.375rem;}
-    .rounded-lg{border-radius:0.5rem;}
-    .rounded-xl{border-radius:0.75rem;}
-    .rounded-2xl{border-radius:1rem;}
-    .rounded-full{border-radius:9999px;}
-    .border{border:1px solid #e2e8f0;}
-    .border-amber-200{border-color:#fde68a;}
-    .bg-white{background:#ffffff;}
-    .bg-white\/90{background:rgba(255,255,255,0.9);}
-    .bg-slate-50{background:#f8fafc;}
-    .bg-slate-200{background:#e2e8f0;}
-    .bg-amber-50{background:#fffbeb;}
-    .text-white{color:#ffffff;}
-    .text-slate-500{color:#64748b;}
-    .text-slate-600{color:#475569;}
-    .text-slate-700{color:#334155;}
-    .text-slate-800{color:#1e293b;}
-    .text-slate-900{color:#0f172a;}
-    .text-amber-700{color:#b45309;}
-    .text-emerald-700{color:#047857;}
-    .text-red-600{color:#dc2626;}
-    .text-xs{font-size:0.75rem;line-height:1.1;}
-    .text-sm{font-size:0.875rem;line-height:1.25rem;}
-    .text-[15px]{font-size:15px;line-height:1.4;}
-    .text-xl{font-size:1.25rem;line-height:1.4;}
-    .font-medium{font-weight:500;}
-    .font-semibold{font-weight:600;}
-    .font-bold{font-weight:700;}
-    .uppercase{text-transform:uppercase;}
-    .tracking-wide{letter-spacing:0.04em;}
-    .leading-snug{line-height:1.375;}
-    .shadow-sm{box-shadow:0 8px 20px rgba(15,23,42,0.08);}
-    .hidden{display:none!important;}
-    .block{display:block;}
-    .shrink-0{flex-shrink:0;}
-    .select-none{user-select:none;}
-    .overflow-hidden{overflow:hidden;}
-    .overflow-auto{overflow:auto;}
-    .resize-y{resize:vertical;}
-    .pointer-events-none{pointer-events:none;}
-    .relative{position:relative;}
-    .absolute{position:absolute;}
-    .fixed{position:fixed;}
-    .sticky{position:sticky;}
-    .-top-2{top:-0.5rem;}
-    .-right-2{right:-0.5rem;}
-    .top-0{top:0;}
-    .right-0{right:0;}
-    .bottom-0{bottom:0;}
-    .inset-x-0{left:0;right:0;}
-    .inset-y-0{top:0;bottom:0;}
-    .z-10{z-index:10;}
-    .opacity-70{opacity:0.7;}
-    .px-2{padding-left:0.5rem;padding-right:0.5rem;}
-    .px-3{padding-left:0.75rem;padding-right:0.75rem;}
-    .px-4{padding-left:1rem;padding-right:1rem;}
-    .pr-3{padding-right:0.75rem;}
-    .pr-10{padding-right:2.5rem;}
-    .pl-5{padding-left:1.25rem;}
-    .py-1{padding-top:0.25rem;padding-bottom:0.25rem;}
-    .py-2{padding-top:0.5rem;padding-bottom:0.5rem;}
-    .py-3{padding-top:0.75rem;padding-bottom:0.75rem;}
-    .p-2{padding:0.5rem;}
-    .p-3{padding:0.75rem;}
-    .p-4{padding:1rem;}
-    .p-6{padding:1.5rem;}
-    .pt-3{padding-top:0.75rem;}
-    .pb-2{padding-bottom:0.5rem;}
-    .pb-3{padding-bottom:0.75rem;}
-    .pb-24{padding-bottom:6rem;}
-    .mt-0\.5{margin-top:0.125rem;}
-    .mt-1{margin-top:0.25rem;}
-    .mt-2{margin-top:0.5rem;}
-    .mt-3{margin-top:0.75rem;}
-    .mt-4{margin-top:1rem;}
-    .mb-1{margin-bottom:0.25rem;}
-    .mb-2{margin-bottom:0.5rem;}
-    .mx-auto{margin-left:auto;margin-right:auto;}
-    .ml-auto{margin-left:auto;}
-    .space-y-1 > * + *{margin-top:0.25rem;}
-    .text-left{text-align:left;}
-    .list-disc{list-style-type:disc;padding-left:1.5rem;}
-    .backdrop-blur{backdrop-filter:blur(12px);}
-    .transition-colors{transition:color .2s ease,background-color .2s ease,border-color .2s ease;}
-    .max-w-3xl{max-width:48rem;}
-    .min-h-[56px]{min-height:56px;}
-    .min-h-[64px]{min-height:64px;}
-    .min-h-[96px]{min-height:96px;}
-    .max-h-[240px]{max-height:240px;}
-
-    @media (min-width:640px){
-      .sm\:flex-row{flex-direction:row;}
-      .sm\:items-center{align-items:center;}
-      .sm\:justify-between{justify-content:space-between;}
-      .sm\:grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr));}
-      .sm\:grid-cols-3{grid-template-columns:repeat(3,minmax(0,1fr));}
-    }
-
     /* Hide email-related buttons in the action bar (keep original behavior) */
     button[title='Email (Text)'],
     button[title='Email (HTML — copied to clipboard)'] {
@@ -166,47 +46,9 @@
 <body class="min-h-screen">
   <div id="root"></div>
 
-  <script>
-  (function(global){
-    function objectIs(x,y){ if(x===y){ return x!==0 || 1/x===1/y; } return x!==x && y!==y; }
-    function createElement(type, props){ var children=[]; for(var i=2;i<arguments.length;i++){ var child=arguments[i]; if(Array.isArray(child)) children=children.concat(child); else children.push(child); } props=props||{}; if(children.length && props.children===undefined){ props=Object.assign({},props,{children:children}); } return { type:type, props:props, children:children }; }
-    function cleanupRemoved(prevMap,nextMap){ for(var key in prevMap){ if(!Object.prototype.hasOwnProperty.call(prevMap,key)) continue; if(!nextMap[key]){ var hooks=prevMap[key].hooks||[]; hooks.forEach(function(h){ if(h && h.kind==='effect' && typeof h.cleanup==='function'){ try{ h.cleanup(); }catch(e){} } }); } } }
-    function runEffects(root,prevMap){ var queue=root.pendingEffects; for(var i=0;i<queue.length;i++){ var entry=queue[i]; var prevHook=prevMap[entry.path] && prevMap[entry.path].hooks && prevMap[entry.path].hooks[entry.index]; if(prevHook && prevHook.kind==='effect' && typeof prevHook.cleanup==='function'){ try{ prevHook.cleanup(); }catch(e){} } var nextHook=root.nextHookMap[entry.path] && root.nextHookMap[entry.path].hooks && root.nextHookMap[entry.path].hooks[entry.index]; if(nextHook && nextHook.kind==='effect'){ try{ var cleanup=nextHook.create(); if(typeof cleanup==='function'){ nextHook.cleanup=cleanup; } else { nextHook.cleanup=undefined; } }catch(e){ console.error(e); } } } root.pendingEffects=[]; }
-    function TinyRoot(container){ this.container=container; this.rootElement=null; this.hookMap={}; this.nextHookMap=null; this.pendingEffects=[]; this.isRendering=false; this.isScheduled=false; }
-    TinyRoot.prototype.render=function(element){ this.rootElement=element; this.commit(); };
-    TinyRoot.prototype.commit=function(){ if(!this.rootElement) return; this.isRendering=true; var prevMap=this.hookMap; this.nextHookMap={}; this.pendingEffects=[]; var dom=mountNode(this.rootElement,'0',this); while(this.container.firstChild){ this.container.removeChild(this.container.firstChild); } if(dom){ this.container.appendChild(dom); } cleanupRemoved(prevMap,this.nextHookMap); runEffects(this,prevMap); this.hookMap=this.nextHookMap; this.nextHookMap=null; this.isRendering=false; };
-    TinyRoot.prototype.schedule=function(){ var root=this; if(root.isRendering) return; if(root.isScheduled) return; root.isScheduled=true; Promise.resolve().then(function(){ root.isScheduled=false; root.commit(); }); };
-    var CURRENT=null;
-    function mountNode(node,path,root){ if(node===null||node===undefined||node===false) return null; if(typeof node==='string'||typeof node==='number') return document.createTextNode(String(node)); if(Array.isArray(node)){ var frag=document.createDocumentFragment(); for(var i=0;i<node.length;i++){ var child=mountNode(node[i], path+'.'+i, root); if(child) frag.appendChild(child); } return frag; } if(typeof node.type==='function'){ return mountComponent(node,path,root); } return mountElement(node,path,root); }
-    function mountComponent(node,path,root){ var prevStore=root.hookMap[path] || { hooks:[] }; var nextStore={ hooks:[] }; root.nextHookMap[path]=nextStore; var instance={ root:root, path:path, prevHooks:prevStore.hooks||[], nextStore:nextStore, hookIndex:0 }; var prevCurrent=CURRENT; CURRENT=instance; var props=node.props||{}; if(node.children && node.children.length && props.children===undefined){ props=Object.assign({},props,{children:node.children}); } var rendered=node.type(props); CURRENT=prevCurrent; return mountNode(rendered, path+'.0', root); }
-    function mountElement(node,path,root){ var el=document.createElement(node.type); var props=node.props||{}; for(var key in props){ if(!Object.prototype.hasOwnProperty.call(props,key)) continue; var value=props[key]; if(key==='children'||key==='key') continue; if(key==='className'||key==='class'){ el.className=value||''; continue; } if(key==='style' && value && typeof value==='object'){ for(var s in value){ if(Object.prototype.hasOwnProperty.call(value,s)){ try{ el.style[s]=value[s]; }catch(e){} } } continue; } if(key==='htmlFor'){ el.htmlFor=value; continue; } if(key==='dangerouslySetInnerHTML' && value && value.__html!==undefined){ el.innerHTML=value.__html; continue; } if(key==='defaultValue'){ el.defaultValue=value!=null ? value : ''; continue; } if(key==='value'){ el.value=value!=null ? value : ''; continue; } if(key==='defaultChecked'){ el.defaultChecked=!!value; continue; } if(key==='checked'){ el.checked=!!value; continue; } if(key==='ref') continue; if(key.slice(0,2)==='on' && typeof value==='function'){ el.addEventListener(key.slice(2).toLowerCase(), value); continue; } if(value===false || value===null || value===undefined) continue; el.setAttribute(key,value); }
-      if(!(props && props.dangerouslySetInnerHTML)){ for(var i=0;i<node.children.length;i++){ var childNode=mountNode(node.children[i], path+'.'+i, root); if(childNode) el.appendChild(childNode); } }
-      if(props && props.ref){ if(typeof props.ref==='function'){ props.ref(el); } else if(props.ref && typeof props.ref==='object'){ props.ref.current=el; } }
-      return el;
-    }
-    function ensureStore(path,root){ if(!root.hookMap[path]){ root.hookMap[path]={ hooks:[] }; } return root.hookMap[path]; }
-    function useState(initial){ if(!CURRENT) throw new Error('useState outside component'); var inst=CURRENT; var idx=inst.hookIndex++; var prevHook=inst.prevHooks[idx]; var hasPrev=prevHook && prevHook.kind==='state'; var value=hasPrev ? prevHook.value : (typeof initial==='function' ? initial() : initial); inst.nextStore.hooks[idx]={ kind:'state', value:value }; var path=inst.path; var root=inst.root; function setState(update){ var store=ensureStore(path,root); var hook=store.hooks[idx]; var currentValue=hook && hook.kind==='state' ? hook.value : value; var nextValue=(typeof update==='function') ? update(currentValue) : update; if(objectIs(nextValue,currentValue)) return; store.hooks[idx]={ kind:'state', value:nextValue }; root.schedule(); } return [value,setState]; }
-    function useRef(initial){ if(!CURRENT) throw new Error('useRef outside component'); var inst=CURRENT; var idx=inst.hookIndex++; var prevHook=inst.prevHooks[idx]; var refObj=(prevHook && prevHook.kind==='ref') ? prevHook.value : { current:initial }; inst.nextStore.hooks[idx]={ kind:'ref', value:refObj }; return refObj; }
-    function depsChanged(prevDeps,deps){ if(!prevDeps) return true; if(!deps) return true; if(prevDeps.length!==deps.length) return true; for(var i=0;i<deps.length;i++){ if(!objectIs(prevDeps[i],deps[i])) return true; } return false; }
-    function useEffect(create,deps){ if(!CURRENT) throw new Error('useEffect outside component'); var inst=CURRENT; var idx=inst.hookIndex++; var prevHook=inst.prevHooks[idx]; var prevDeps=prevHook && prevHook.kind==='effect' ? prevHook.deps : undefined; var shouldRun=!prevHook || depsChanged(prevDeps,deps); inst.nextStore.hooks[idx]={ kind:'effect', create:create, deps:deps, cleanup: prevHook && prevHook.kind==='effect' ? prevHook.cleanup : undefined }; if(shouldRun){ inst.root.pendingEffects.push({ path:inst.path, index:idx }); } }
-    var React={ createElement:createElement, useState:useState, useEffect:useEffect, useRef:useRef };
-    var ReactDOM={ createRoot:function(container){ var root=new TinyRoot(container); return { render:function(element){ root.render(element); }, unmount:function(){ cleanupRemoved(root.hookMap,{}); root.hookMap={}; while(container.firstChild){ container.removeChild(container.firstChild); } } }; } };
-    global.React=React;
-    global.ReactDOM=ReactDOM;
-  })(window);
-  </script>
-  <script>
-  (function(global){
-    if(global.html2pdf) return;
-    function Task(){ this._options={}; this._source=null; }
-    Task.prototype.from=function(src){ this._source=src; return this; };
-    Task.prototype.set=function(opt){ this._options=Object.assign({},opt); return this; };
-    Task.prototype.toPdf=function(){ return this; };
-    Task.prototype.output=function(type){ if(type==='blob'){ return Promise.resolve(new Blob([], { type:'application/pdf' })); } return Promise.resolve(''); };
-    Task.prototype.save=function(filename){ var name=filename || (this._options && this._options.filename) || 'document.pdf'; var blob=new Blob([], { type:'application/pdf' }); var url=URL.createObjectURL(blob); var link=document.createElement('a'); link.href=url; link.download=name; document.body.appendChild(link); link.click(); document.body.removeChild(link); setTimeout(function(){ URL.revokeObjectURL(url); },1500); return Promise.resolve(); };
-    global.html2pdf=function(){ return new Task(); };
-  })(window);
-  </script>
+  <script src="react.production.min.js"></script>
+  <script src="react-dom.production.min.js"></script>
+  <script src="html2pdf.bundle.min.js"></script>
 
   <script>
   (function(){
@@ -253,23 +95,15 @@
 
     /* ================= Data ================= */
     var AUD_COLUMNS = ['Walls','Seats','Floors','Masking','Ceiling','Screen','Lights','Fire Extinguisher','Doors','Comfort'];
-    var WEATHER_OPTIONS = ['Clear','Dry','Overcast','Rain','Sleet','Snow','High Winds'];
-    function defaultExteriorWeather(){ return { conditions: [], observation: '' }; }
-    function normalizeExteriorWeather(raw){
-      var base = defaultExteriorWeather();
-      var src = raw || {};
-      if(Array.isArray(src.conditions)){
-        var dedup = [];
-        src.conditions.forEach(function(cond){
-          if(WEATHER_OPTIONS.indexOf(cond)!==-1 && dedup.indexOf(cond)===-1){
-            dedup.push(cond);
-          }
-        });
-        base.conditions = WEATHER_OPTIONS.filter(function(opt){ return dedup.indexOf(opt)!==-1; });
-      }
-      if(typeof src.observation === 'string'){ base.observation = src.observation; }
-      return base;
-    }
+    var WEATHER_CHOICES = [
+      'Clear / Sunny',
+      'Partly Cloudy',
+      'Overcast',
+      'Rain',
+      'Snow / Ice',
+      'Windy',
+      'Stormy'
+    ];
     var baseCategories = [
       { title:'Start', items:[] },
       { title:'Exterior', items:[
@@ -350,7 +184,7 @@
 
     var LSKEY = 'TFI-mobile-v7';
     function deepClone(obj){ try { return typeof structuredClone==='function' ? structuredClone(obj) : JSON.parse(JSON.stringify(obj)); } catch(e){ return JSON.parse(JSON.stringify(obj)); } }
-    function defaultMeta(){ return { theatreName:'', siteNumber:'', auditoriumCount:'', managerName:'', photoData:'' }; }
+    function defaultMeta(){ return { theatreName:'', siteNumber:'', auditoriumCount:'', managerName:'', photoData:'', exteriorWeather:'', exteriorWeatherNotes:'' }; }
     function defaultSignoff(){ return { done:false, by:'', at:'' }; }
     function ensureSignoff(so){ so = so || {}; return { done: !!so.done, by: so.by || '', at: so.at || '' }; }
 
@@ -399,9 +233,7 @@
           return { title:cat.title, items: cat.items.map(function(q){ return { q:q, note:'', open:true, subs: Object.fromEntries(AUD_COLUMNS.map(function(k){ return [k,'ok']; })), photos: [] }; }), signoff: defaultSignoff() };
         }
         if(cat.title==='Finish') return { title:cat.title, items:[], signoff: defaultSignoff() };
-        var common = { title:cat.title, items: cat.items.map(function(q){ return { q:q, checked:true, status:'ok', note:'', open:false, photos:[] }; }), signoff: defaultSignoff() };
-        if(cat.title==='Exterior'){ common.weather = defaultExteriorWeather(); }
-        return common;
+        return { title:cat.title, items: cat.items.map(function(q){ return { q:q, checked:true, status:'ok', note:'', open:false, photos:[] }; }), signoff: defaultSignoff() };
       });
     }
 
@@ -431,9 +263,7 @@
         }
         if(cat.title==='Finish') return { title:cat.title, items:[], signoff: ensureSignoff(oldCat && oldCat.signoff) };
         var byQ2 = Object.fromEntries(((oldCat && oldCat.items) || []).map(function(i){ return [i.q,i]; }));
-        var mergedCat = { title:cat.title, items: cat.items.map(function(q){ var old2 = byQ2[q] || {}; var status = (typeof old2.status==='string') ? old2.status : 'ok'; return { q:q, checked: (typeof old2.checked!=='undefined') ? !!old2.checked : true, status: status, note: old2.note||'', open:false, photos: Array.isArray(old2.photos)? old2.photos : [] }; }), signoff: ensureSignoff(oldCat && oldCat.signoff) };
-        if(cat.title==='Exterior'){ mergedCat.weather = normalizeExteriorWeather(oldCat && oldCat.weather); }
-        return mergedCat;
+        return { title:cat.title, items: cat.items.map(function(q){ var old2 = byQ2[q] || {}; var status = (typeof old2.status==='string') ? old2.status : 'ok'; return { q:q, checked: (typeof old2.checked!=='undefined') ? !!old2.checked : true, status: status, note: old2.note||'', open:false, photos: Array.isArray(old2.photos)? old2.photos : [] }; }), signoff: ensureSignoff(oldCat && oldCat.signoff) };
       });
       var activeTab = Math.min(Math.max(0, (saved && typeof saved.activeTab==='number' ? saved.activeTab : 0)), mergedAnswers.length-1);
       var meta = Object.assign({}, defaultMeta(), (saved && saved.meta)||{});
@@ -469,13 +299,6 @@
       state.answers.forEach(function(cat){
         if(cat.title==='Start') return;
         lines.push('== ' + cat.title + ' ==');
-        if(cat.title==='Exterior'){
-          var weather = normalizeExteriorWeather(cat.weather);
-          var condText = weather.conditions.length ? weather.conditions.join(', ') : '—';
-          lines.push('Weather Conditions: ' + condText);
-          var obsText = (weather.observation || '').trim();
-          if(obsText) lines.push('Weather Observations: ' + obsText);
-        }
         if(cat.title==='Auditorium Issues'){
           var audCount = Math.max(0, parseInt((state.meta&&state.meta.auditoriumCount)||'0',10)||0) || cat.items.length;
           var use = cat.items.slice(0, audCount);
@@ -516,19 +339,6 @@
           if(cat.title==='Finish'){
             return '<h3 style="margin:16px 0 8px 0;font:600 16px/1.3 system-ui,sans-serif;color:#0f172a">Finish</h3>'+signoffHtml(cat);
           }
-          var weatherBlock = '';
-          if(cat.title==='Exterior'){
-            var weather = normalizeExteriorWeather(cat.weather);
-            var condText = weather.conditions.length ? weather.conditions.join(', ') : '—';
-            var obs = (weather.observation || '').trim();
-            weatherBlock = [
-              '<div style="margin:0 0 12px 0;padding:12px;border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc">',
-                '<div style="font:600 11px system-ui,sans-serif;color:#475569;text-transform:uppercase;letter-spacing:0.04em">Weather Conditions</div>',
-                '<div style="margin-top:6px;font:13px system-ui,sans-serif;color:#0f172a">'+escHtml(condText)+'</div>',
-                obs ? '<div style="margin-top:6px;font:12px system-ui,sans-serif;color:#334155">Observations: '+escHtml(obs)+'</div>' : '',
-              '</div>'
-            ].join('');
-          }
           var rows = cat.items.map(function(it){
             var photoCells = includePhotosInEmail && it.photos && it.photos.length ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">' + it.photos.map(imgThumb).join('') + '</div>' : '';
             var sym = (it.status==='issue') ? '✗' : (it.status==='ok' ? '✓' : 'N/A');
@@ -541,7 +351,6 @@
             ].join('');
           }).join('');
           return '<h3 style="margin:16px 0 8px 0;font:600 16px/1.3 system-ui,sans-serif;color:#0f172a">'+escHtml(cat.title)+'</h3>'+
-                 weatherBlock +
                  '<table style="width:100%;border-collapse:collapse">'+rows+'</table>'+signoffHtml(cat);
         }).join('');
 
@@ -831,7 +640,9 @@
           theatreName: m.theatreName || "",
           siteNumber: m.siteNumber || "",
           auditoriumCount: m.auditoriumCount || "",
-          managerName: m.managerName || ""
+          managerName: m.managerName || "",
+          exteriorWeather: m.exteriorWeather || "",
+          exteriorWeatherNotes: m.exteriorWeatherNotes || ""
         },
         activeTab: (typeof s.activeTab === 'number') ? s.activeTab : null,
         summary: summary,
@@ -904,7 +715,6 @@
       function setNote(tabIdx, itemIdx, value){ setState(function(s){ var n=deepClone(s); n.answers[tabIdx].items[itemIdx].note=value; return n; }); }
       function setAudSub(tabIdx, itemIdx, key, value){ setState(function(s){ var n=deepClone(s); n.answers[tabIdx].items[itemIdx].subs[key]=value; return n; }); }
       function setMeta(key, value){ setState(function(s){ var nn=Object.assign({}, s.meta); nn[key]=value; return Object.assign({}, s, { meta: nn }); }); }
-      function updateExteriorWeather(tabIdx, updater){ setState(function(s){ if(tabIdx<0 || tabIdx>=s.answers.length) return s; var cat = s.answers[tabIdx]; if(!cat || cat.title!=='Exterior') return s; var current = normalizeExteriorWeather(cat.weather); var updated = (typeof updater==='function') ? updater(current) : updater; var next = normalizeExteriorWeather(typeof updated==='undefined' ? current : updated); var sameObservation = next.observation === current.observation; var sameConditions = next.conditions.length===current.conditions.length && next.conditions.every(function(cond,idx){ return cond===current.conditions[idx]; }); if(sameObservation && sameConditions) return s; var n=deepClone(s); n.answers[tabIdx].weather = next; return n; }); }
       function setSignoff(tabIdx, done){ setState(function(s){ var n=deepClone(s); var cat = n.answers[tabIdx]; var so = ensureSignoff(cat.signoff); if(done){ so.done = true; so.by = n.meta.managerName || ''; so.at = new Date().toLocaleString(); } else { so.done=false; so.by=''; so.at=''; } cat.signoff = so; return n; }); }
       async function addPhoto(tabIdx, itemIdx, file){ try { var dataUrl = await compressImageToDataURL(file,1280,1280,0.8); setState(function(s){ var n=deepClone(s); if(!n.answers[tabIdx].items[itemIdx].photos) n.answers[tabIdx].items[itemIdx].photos=[]; n.answers[tabIdx].items[itemIdx].photos.push(dataUrl); return n; }); } catch(e){} }
       function removePhoto(tabIdx, itemIdx, photoIdx){ setState(function(s){ var n=deepClone(s); (n.answers[tabIdx].items[itemIdx].photos||[]).splice(photoIdx,1); return n; }); }
@@ -947,12 +757,23 @@
       }
 
       function PhotoStrip(p){ var photos=p.photos, onRemove=p.onRemove; if(!photos||!photos.length) return null; var kids = photos.map(function(src,idx){ return h('div',{ className:'relative' }, h('img',{ alt:'photo', src:src, className:'h-16 w-auto rounded-md border' }), h('button',{ type:'button', title:'Remove', onPointerDown:function(e){ e.preventDefault(); e.stopPropagation(); onRemove(idx); }, onClick:function(e){ e.preventDefault(); e.stopPropagation(); } , className:'absolute -top-2 -right-2 h-5 w-5 rounded-full border bg-white text-slate-700 flex items-center justify-center' }, h(Icon.X)) ); }); return h('div',{ className:'mt-2 flex flex-wrap gap-2' }, kids); }
-      function ExteriorWeatherBlock(p){ var weather = normalizeExteriorWeather(p.weather); var selected = weather.conditions; var obsRef = useRef(uid('weather-note')); var obsId = obsRef.current; return h('div',{ className:'border rounded-xl p-3 bg-white shadow-sm' },
-          h('div',{ className:'text-xs font-semibold text-slate-500 uppercase tracking-wide' }, 'Weather Conditions'),
-          h('div',{ className:'mt-2 flex flex-wrap gap-2' }, WEATHER_OPTIONS.map(function(opt){ var isSelected = selected.indexOf(opt)!==-1; function handleToggle(e){ e.preventDefault(); e.stopPropagation(); if(p && typeof p.onToggle==='function') p.onToggle(opt); } return h('button',{ key:opt, type:'button', className:'px-3 py-1 rounded-full border text-sm transition-colors', style:{ background: isSelected? grad:'#fff', color: isSelected? '#fff':'#1e293b', borderColor: isSelected? theme.colors[1]:'#cbd5e1', boxShadow: isSelected? '0 4px 12px rgba(0,0,0,0.12)':'none' }, 'aria-pressed': isSelected, onPointerDown:handleToggle, onClick:handleToggle }, opt); })),
-          h('label',{ htmlFor:obsId, className:'mt-4 block text-xs font-semibold text-slate-500 uppercase tracking-wide' }, 'Observations'),
-          h('textarea',{ id:obsId, value:weather.observation, onChange:function(e){ if(p && typeof p.onObservationChange==='function') p.onObservationChange(e.target.value); }, placeholder:'Observations (optional)', className:'mt-2 w-full rounded-lg border p-2 text-sm resize-y min-h-[64px]' })
-        ); }
+
+      function ExteriorWeatherBlock(){ var condition = state.meta.exteriorWeather || ''; var notes = state.meta.exteriorWeatherNotes || ''; return h('div',{ className:'bg-white border rounded-xl p-3 shadow-sm' },
+        h('div',{ className:'text-xs font-semibold text-slate-500 mb-2' }, 'Weather Conditions'),
+        h('div',{ className:'flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-3' },
+          h('div',{ className:'w-full sm:w-56' },
+            h('label',{ className:'block text-xs font-semibold text-slate-500 mb-1' }, 'Conditions'),
+            h('select',{ className:'w-full rounded-lg border px-3 py-2 text-sm bg-white', value: condition, onChange:function(e){ setMeta('exteriorWeather', e.target.value); } },
+              h('option',{ value:'' }, 'Select weather'),
+              WEATHER_CHOICES.map(function(label){ return h('option',{ key:label, value:label }, label); })
+            )
+          ),
+          h('div',{ className:'w-full flex-1' },
+            h('label',{ className:'block text-xs font-semibold text-slate-500 mb-1' }, 'Notes (optional)'),
+            h('textarea',{ className:'w-full rounded-lg border p-2 text-sm resize-y min-h-[72px]', value: notes, onChange:function(e){ setMeta('exteriorWeatherNotes', e.target.value); }, placeholder:'Add weather details if needed' })
+          )
+        )
+      ); }
 
       function Row(p){ var tabIdx=p.tabIdx, itemIdx=p.itemIdx, item=p.item; var status = item.status||'ok'; var isIssue = status==='issue'; var isOk = status==='ok'; var isNa = status==='na'; var rp = String(tabIdx)+':'+String(itemIdx); var openNow = state.openPath===rp; var _d = useState(item.note||''); var draft=_d[0]; var setDraft=_d[1]; var ref = useRef(null); var prevOpenRef = useRef(openNow);
         useEffect(function(){ if(openNow && ref.current && !IS_COARSE_POINTER){ try{ ref.current.focus({preventScroll:true}); }catch(e){} } },[openNow]);
@@ -1048,7 +869,6 @@
       function Header(){ var themeButtons = THEMES.map(function(t){ return h('button',{ title:t.name, onPointerDown:function(e){ e.preventDefault(); setThemeKey(t.key); }, className:'h-6 w-6 rounded-full border', style:{ background:t.dot, borderColor: state.theme===t.key? theme.colors[1]:'#e5e7eb', boxShadow: state.theme===t.key? ('0 0 0 3px '+theme.colors[0]+'44') : 'none' } }); }); var actionBar = null; if(activeCat.title==='Start' || activeCat.title==='Finish'){ actionBar = h('div',{ className:'mt-2 flex items-center gap-2 max-w-3xl mx-auto'}, h('button',{ title:'Email (Text)', onPointerDown:function(){ if(!canFinishActions) return; var subject='TFI Inspection - '+(state.meta.theatreName||'Site')+' - '+new Date().toLocaleDateString(); var body=buildTextReport(state); var url='mailto:?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body); var a=document.createElement('a'); a.href=url; a.click(); }, className:'rounded-lg px-3 py-2 text-sm flex items-center gap-1 btn-fill', style:{ background: canFinishActions? grad:'#94a3b8', opacity: canFinishActions?1:.5 }, disabled:!canFinishActions }, h(Icon.Mail),'Email (Text)'), h('button',{ title:'Email (HTML — copied to clipboard)', onPointerDown: async function(){ if(!canFinishActions) return; var subject='TFI Inspection - '+(state.meta.theatreName||'Site')+' - '+new Date().toLocaleDateString(); var html = buildHtmlReport(state, false); var copied=false; try{ if('ClipboardItem' in window){ var ci = new ClipboardItem({ 'text/html': new Blob([html], { type:'text/html' }) }); await navigator.clipboard.write([ci]); } else { await navigator.clipboard.writeText(html); } copied=true; }catch(e){} var note = copied ? '\n\n(HTML report copied to clipboard — paste it into your email.)' : '\n\n(If paste fails, export HTML from the app and attach.)'; var fallback = buildTextReport(state) + note; var url='mailto:?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(fallback); var a=document.createElement('a'); a.href=url; a.click(); }, className:'rounded-lg px-3 py-2 text-sm flex items-center gap-1 btn-fill', style:{ background: canFinishActions? grad:'#94a3b8', opacity: canFinishActions?1:.5 }, disabled:!canFinishActions }, h(Icon.Mail),'Email (HTML)'), h('button',{ title:'Export to PDF', onPointerDown: async function(){ if(!canFinishActions) return; await flushDrafts(); var reportContent = buildHtmlReport(state, true); var theatre = state.meta.theatreName || 'Report'; var date = new Date().toISOString().slice(0, 10); var filename = 'TFI-' + theatre.replace(/[^a-z0-9]/gi, '-') + '-' + date + '.pdf'; var options = { margin: 0.5, filename: filename, image: { type: 'jpeg', quality: 0.95 }, html2canvas: { scale: 2, useCORS: true }, jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }, pagebreak: { mode: 'avoid-all' } }; var originalScrollY = window.scrollY; window.scrollTo(0, 0); setTimeout(function(){ html2pdf().from(reportContent).set(options).save().finally(function(){ window.scrollTo(0, originalScrollY); }); }, 100); }, className:'rounded-lg px-3 py-2 text-sm flex items-center gap-1 btn-fill', style:{ background: canFinishActions? grad:'#94a3b8', opacity: canFinishActions?1:.5 }, disabled:!canFinishActions }, h(Icon.Printer),'Export PDF'), h('button',{ title:'Send to SP', onPointerDown: async function(){ await flushDrafts(); await sendJsonPlusPdfAndTxt(state); }, className:'rounded-lg px-3 py-2 text-sm flex items-center gap-1 btn-fill', style:{ background: canFinishActions? grad:'#94a3b8', opacity: canFinishActions?1:.6 }, disabled:!canFinishActions }, 'Send to SP'), (activeCat.title==='Start' ? h('button',{ title:'Reset all', onPointerDown:function(){ if(confirm('Reset all checks, photos, and comments? (Start page fields preserved except Manager Name.)')){ setState(function(s){ return { theme:s.theme, activeTab:0, answers:buildAnswers(baseCategories), meta:Object.assign({}, s.meta, { managerName:'' }), openPath:null }; }); } }, className:'rounded-lg px-3 py-2 text-sm flex items-center gap-1 btn-outline border text-red-600' }, h(Icon.Trash2),'Reset') : null) ); } var gatedNote = (!canFinishActions && (activeCat.title==='Start' || activeCat.title==='Finish')) ? h('div',{ className:'max-w-3xl mx-auto mt-1 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-1' }, 'Complete all pages to enable Email and Print.') : null; return h('div', { className:'sticky top-0 z-10 px-3 pt-3 pb-2 print:hidden', style:{ background:'linear-gradient(180deg, rgba(255,255,255,.95), rgba(255,255,255,.75))', backdropFilter:'blur(8px)'} }, h('div', { className:'flex items-center gap-2'}, h('div',{ className:'font-semibold text-slate-800 flex items-center gap-2'}, h(Icon.Palette), 'TFI Inspection'), h('div',{ className:'ml-auto flex items-center gap-2'}, themeButtons) ), h('div',{ className:'mt-2'}, h('div',{ className:'max-w-3xl mx-auto'}, h('label',{ className:'block text-xs font-semibold text-slate-500 mb-1', htmlFor:'sectionSel'},'Section'), h('div',{ className:'relative' }, h('select',{ id:'sectionSel', value:activeTab, onChange:function(e){ goTo(parseInt(e.target.value,10)); }, className:'w-full rounded-xl px-3 py-3 pr-10 text-[15px] font-semibold btn-fill', style:{ background: grad, color:'#fff' } }, state.answers.map(function(cat,idx){ return h('option',{ value:idx, style:{ color:'#0f172a', background:'#fff' }}, cat.title); })), h('div',{ className:'pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-white'}, h(Icon.ChevronDown)) ) ) ), actionBar, gatedNote ); }
 
       function PageBody(){
-        if(!activeCat) return null;
         if(activeCat.title==='Start') return h(StartPage);
         if(activeCat.title==='Finish') return h('div',null, h(FinishPage), h(SignOffBlock,{ tabIdx: activeTab }));
         if(activeCat.title==='Auditorium Issues'){
@@ -1059,31 +879,10 @@
             h(SignOffBlock,{ tabIdx: activeTab })
           );
         }
-        if(activeCat.title==='Exterior'){
-          var weatherNow = normalizeExteriorWeather(activeCat.weather);
-          function toggleWeather(cond){
-            updateExteriorWeather(activeTab, function(cur){
-              var next = cur.conditions.slice();
-              var idx = next.indexOf(cond);
-              if(idx>-1){ next.splice(idx,1); } else { next.push(cond); }
-              return Object.assign({}, cur, { conditions: next });
-            });
-          }
-          function changeObservation(val){
-            updateExteriorWeather(activeTab, function(cur){
-              return Object.assign({}, cur, { observation: val });
-            });
-          }
-          return h('div', null,
-            h('div',{ className:'max-w-3xl mx-auto grid gap-3' },
-              h(ExteriorWeatherBlock,{ weather: weatherNow, onToggle: toggleWeather, onObservationChange: changeObservation }),
-              activeCat.items.map(function(item,i){ return h(Row,{ tabIdx:activeTab, itemIdx:i, item:item }); })
-            ),
-            h(SignOffBlock,{ tabIdx: activeTab })
-          );
-        }
+        var rows = activeCat.items.map(function(item,i){ return h(Row,{ tabIdx:activeTab, itemIdx:i, item:item }); });
+        if(activeCat.title==='Exterior'){ rows.unshift(h(ExteriorWeatherBlock)); }
         return h('div', null,
-          h('div',{ className:'max-w-3xl mx-auto grid gap-3' }, activeCat.items.map(function(item,i){ return h(Row,{ tabIdx:activeTab, itemIdx:i, item:item }); })),
+          h('div',{ className:'max-w-3xl mx-auto grid gap-3' }, rows),
           h(SignOffBlock,{ tabIdx: activeTab })
         );
       }
