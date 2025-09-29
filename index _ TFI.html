@@ -86,6 +86,27 @@
 
     /* ================= Data ================= */
     var AUD_COLUMNS = ['Walls','Seats','Floors','Masking','Ceiling','Screen','Lights','Fire Extinguisher','Doors','Comfort'];
+    var WEATHER_OPTIONS = ['Clear','Dry','Overcast','Rain','Sleet','Snow','High Winds'];
+    function defaultWeather(){
+      return {
+        conditions: Object.fromEntries(WEATHER_OPTIONS.map(function(opt){ return [opt,false]; })),
+        note: ''
+      };
+    }
+    function ensureWeather(weather){
+      var base = defaultWeather();
+      if(weather && typeof weather === 'object'){
+        if(weather.conditions && typeof weather.conditions === 'object'){
+          WEATHER_OPTIONS.forEach(function(opt){
+            if(typeof weather.conditions[opt] === 'boolean'){
+              base.conditions[opt] = weather.conditions[opt];
+            }
+          });
+        }
+        if(typeof weather.note === 'string'){ base.note = weather.note; }
+      }
+      return base;
+    }
     var baseCategories = [
       { title:'Start', items:[] },
       { title:'Exterior', items:[
@@ -215,7 +236,9 @@
           return { title:cat.title, items: cat.items.map(function(q){ return { q:q, note:'', open:true, subs: Object.fromEntries(AUD_COLUMNS.map(function(k){ return [k,'ok']; })), photos: [] }; }), signoff: defaultSignoff() };
         }
         if(cat.title==='Finish') return { title:cat.title, items:[], signoff: defaultSignoff() };
-        return { title:cat.title, items: cat.items.map(function(q){ return { q:q, checked:true, status:'ok', note:'', open:false, photos:[] }; }), signoff: defaultSignoff() };
+        var general = { title:cat.title, items: cat.items.map(function(q){ return { q:q, checked:true, status:'ok', note:'', open:false, photos:[] }; }), signoff: defaultSignoff() };
+        if(cat.title==='Exterior') general.weather = defaultWeather();
+        return general;
       });
     }
 
@@ -245,7 +268,9 @@
         }
         if(cat.title==='Finish') return { title:cat.title, items:[], signoff: ensureSignoff(oldCat && oldCat.signoff) };
         var byQ2 = Object.fromEntries(((oldCat && oldCat.items) || []).map(function(i){ return [i.q,i]; }));
-        return { title:cat.title, items: cat.items.map(function(q){ var old2 = byQ2[q] || {}; var status = (typeof old2.status==='string') ? old2.status : 'ok'; return { q:q, checked: (typeof old2.checked!=='undefined') ? !!old2.checked : true, status: status, note: old2.note||'', open:false, photos: Array.isArray(old2.photos)? old2.photos : [] }; }), signoff: ensureSignoff(oldCat && oldCat.signoff) };
+        var mergedGeneral = { title:cat.title, items: cat.items.map(function(q){ var old2 = byQ2[q] || {}; var status = (typeof old2.status==='string') ? old2.status : 'ok'; return { q:q, checked: (typeof old2.checked!=='undefined') ? !!old2.checked : true, status: status, note: old2.note||'', open:false, photos: Array.isArray(old2.photos)? old2.photos : [] }; }), signoff: ensureSignoff(oldCat && oldCat.signoff) };
+        if(cat.title==='Exterior') mergedGeneral.weather = ensureWeather(oldCat && oldCat.weather);
+        return mergedGeneral;
       });
       var activeTab = Math.min(Math.max(0, (saved && typeof saved.activeTab==='number' ? saved.activeTab : 0)), mergedAnswers.length-1);
       var meta = Object.assign({}, defaultMeta(), (saved && saved.meta)||{});
@@ -281,6 +306,15 @@
       state.answers.forEach(function(cat){
         if(cat.title==='Start') return;
         lines.push('== ' + cat.title + ' ==');
+        if(cat.title==='Exterior' && cat.weather){
+          var weather = ensureWeather(cat.weather);
+          var selected = WEATHER_OPTIONS.filter(function(opt){ return weather.conditions && weather.conditions[opt]; });
+          var selectedStr = selected.length ? selected.join(', ') : 'None selected';
+          lines.push('Weather Conditions: ' + selectedStr);
+          if(weather.note){
+            lines.push('Weather Observations: ' + weather.note);
+          }
+        }
         if(cat.title==='Auditorium Issues'){
           var audCount = Math.max(0, parseInt((state.meta&&state.meta.auditoriumCount)||'0',10)||0) || cat.items.length;
           var use = cat.items.slice(0, audCount);
@@ -321,6 +355,18 @@
           if(cat.title==='Finish'){
             return '<h3 style="margin:16px 0 8px 0;font:600 16px/1.3 system-ui,sans-serif;color:#0f172a">Finish</h3>'+signoffHtml(cat);
           }
+          var weatherHtml = '';
+          if(cat.title==='Exterior' && cat.weather){
+            var weather = ensureWeather(cat.weather);
+            var selected = WEATHER_OPTIONS.filter(function(opt){ return weather.conditions && weather.conditions[opt]; });
+            var selectedText = selected.length ? selected.join(', ') : 'None selected';
+            var noteText = (weather.note || '').trim();
+            weatherHtml = '<div style="margin:8px 0;padding:10px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;font:12px/1.5 system-ui,sans-serif;color:#334155">'
+              + '<div style="font-weight:600;color:#0f172a;margin-bottom:4px">Weather Conditions</div>'
+              + '<div>' + escHtml(selectedText) + '</div>'
+              + (noteText ? '<div style="margin-top:6px"><span style="font-weight:600;color:#0f172a">Observations:</span> ' + escHtml(noteText) + '</div>' : '')
+              + '</div>';
+          }
           var rows = cat.items.map(function(it){
             var photoCells = includePhotosInEmail && it.photos && it.photos.length ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">' + it.photos.map(imgThumb).join('') + '</div>' : '';
             var sym = (it.status==='issue') ? '✗' : (it.status==='ok' ? '✓' : 'N/A');
@@ -333,6 +379,7 @@
             ].join('');
           }).join('');
           return '<h3 style="margin:16px 0 8px 0;font:600 16px/1.3 system-ui,sans-serif;color:#0f172a">'+escHtml(cat.title)+'</h3>'+
+                 weatherHtml +
                  '<table style="width:100%;border-collapse:collapse">'+rows+'</table>'+signoffHtml(cat);
         }).join('');
 
@@ -420,12 +467,23 @@
         if (includePhotos && it && Array.isArray(it.photos)) obj.photos = it.photos.slice(0);
         return obj;
       }
-      var sections = answers.map(function(cat){
+      function cloneWeather(weather){
+        var w = ensureWeather(weather);
         return {
+          conditions: Object.assign({}, w.conditions),
+          note: w.note || ''
+        };
+      }
+      var sections = answers.map(function(cat){
+        var section = {
           title: cat && cat.title || '',
           signoff: (cat && cat.signoff) ? { done: !!cat.signoff.done, by: cat.signoff.by || '', at: cat.signoff.at || '' } : null,
           items: Array.isArray(cat && cat.items) ? cat.items.map(cloneItem) : []
         };
+        if(cat && cat.weather){
+          section.weather = cloneWeather(cat.weather);
+        }
+        return section;
       });
       var summary = sections.reduce(function(acc, cat){
         var ok=0, issue=0;
@@ -588,8 +646,16 @@
         return obj;
       }
 
-      var sections = answers.map(function(cat){
+      function cloneWeather(weather){
+        var w = ensureWeather(weather);
         return {
+          conditions: Object.assign({}, w.conditions),
+          note: w.note || ''
+        };
+      }
+
+      var sections = answers.map(function(cat){
+        var section = {
           title: cat && cat.title || '',
           signoff: (cat && cat.signoff) ? {
             done: !!cat.signoff.done,
@@ -598,6 +664,10 @@
           } : null,
           items: Array.isArray(cat && cat.items) ? cat.items.map(cloneItem) : []
         };
+        if(cat && cat.weather){
+          section.weather = cloneWeather(cat.weather);
+        }
+        return section;
       });
 
       var summary = sections.reduce(function(acc, cat){
@@ -698,6 +768,8 @@
       function setSignoff(tabIdx, done){ setState(function(s){ var n=deepClone(s); var cat = n.answers[tabIdx]; var so = ensureSignoff(cat.signoff); if(done){ so.done = true; so.by = n.meta.managerName || ''; so.at = new Date().toLocaleString(); } else { so.done=false; so.by=''; so.at=''; } cat.signoff = so; return n; }); }
       async function addPhoto(tabIdx, itemIdx, file){ try { var dataUrl = await compressImageToDataURL(file,1280,1280,0.8); setState(function(s){ var n=deepClone(s); if(!n.answers[tabIdx].items[itemIdx].photos) n.answers[tabIdx].items[itemIdx].photos=[]; n.answers[tabIdx].items[itemIdx].photos.push(dataUrl); return n; }); } catch(e){} }
       function removePhoto(tabIdx, itemIdx, photoIdx){ setState(function(s){ var n=deepClone(s); (n.answers[tabIdx].items[itemIdx].photos||[]).splice(photoIdx,1); return n; }); }
+      function setWeatherCondition(tabIdx, option, value){ setState(function(s){ var n=deepClone(s); var cat=n.answers[tabIdx]; if(!cat) return s; cat.weather = ensureWeather(cat.weather); cat.weather.conditions[option] = !!value; return n; }); }
+      function setWeatherNote(tabIdx, value){ setState(function(s){ var n=deepClone(s); var cat=n.answers[tabIdx]; if(!cat) return s; cat.weather = ensureWeather(cat.weather); cat.weather.note = value; return n; }); }
 
       // Ensure in‑progress text fields are committed before exports/sends.
       async function flushDrafts(){
@@ -737,6 +809,12 @@
       }
 
       function PhotoStrip(p){ var photos=p.photos, onRemove=p.onRemove; if(!photos||!photos.length) return null; var kids = photos.map(function(src,idx){ return h('div',{ className:'relative' }, h('img',{ alt:'photo', src:src, className:'h-16 w-auto rounded-md border' }), h('button',{ type:'button', title:'Remove', onPointerDown:function(e){ e.preventDefault(); e.stopPropagation(); onRemove(idx); }, onClick:function(e){ e.preventDefault(); e.stopPropagation(); } , className:'absolute -top-2 -right-2 h-5 w-5 rounded-full border bg-white text-slate-700 flex items-center justify-center' }, h(Icon.X)) ); }); return h('div',{ className:'mt-2 flex flex-wrap gap-2' }, kids); }
+
+      function WeatherBlock(p){ var tabIdx=p.tabIdx; var weather=ensureWeather(p.weather); return h('div',{ className:'bg-white border rounded-xl p-3 shadow-sm' },
+          h('div',{ className:'text-xs font-semibold text-slate-500 mb-2' }, 'Weather Conditions'),
+          h('div',{ className:'flex flex-wrap gap-x-4 gap-y-2' }, WEATHER_OPTIONS.map(function(opt){ var checked = !!(weather.conditions && weather.conditions[opt]); return h('label',{ key:opt, className:'flex items-center gap-2 text-sm select-none' }, h('input',{ type:'checkbox', className:'h-4 w-4', checked:checked, onChange:function(e){ setWeatherCondition(tabIdx, opt, e.target.checked); } }), h('span',null,opt)); })),
+          h('div',{ className:'mt-3' }, h('div',{ className:'text-xs font-semibold text-slate-500 mb-1' }, 'Observations (optional)'), h('textarea',{ value:weather.note||'', onChange:function(e){ setWeatherNote(tabIdx, e.target.value); }, placeholder:'Observations (optional)', className:'w-full rounded-lg border p-2 text-sm resize-y min-h-[72px]' }))
+        ); }
 
       function Row(p){ var tabIdx=p.tabIdx, itemIdx=p.itemIdx, item=p.item; var status = item.status||'ok'; var isIssue = status==='issue'; var isOk = status==='ok'; var isNa = status==='na'; var rp = String(tabIdx)+':'+String(itemIdx); var openNow = state.openPath===rp; var _d = useState(item.note||''); var draft=_d[0]; var setDraft=_d[1]; var ref = useRef(null); var prevOpenRef = useRef(openNow);
         useEffect(function(){ if(openNow && ref.current && !IS_COARSE_POINTER){ try{ ref.current.focus({preventScroll:true}); }catch(e){} } },[openNow]);
@@ -831,7 +909,26 @@
       /* ---------- Header, Body, Pager ---------- */
       function Header(){ var themeButtons = THEMES.map(function(t){ return h('button',{ title:t.name, onPointerDown:function(e){ e.preventDefault(); setThemeKey(t.key); }, className:'h-6 w-6 rounded-full border', style:{ background:t.dot, borderColor: state.theme===t.key? theme.colors[1]:'#e5e7eb', boxShadow: state.theme===t.key? ('0 0 0 3px '+theme.colors[0]+'44') : 'none' } }); }); var actionBar = null; if(activeCat.title==='Start' || activeCat.title==='Finish'){ actionBar = h('div',{ className:'mt-2 flex items-center gap-2 max-w-3xl mx-auto'}, h('button',{ title:'Email (Text)', onPointerDown:function(){ if(!canFinishActions) return; var subject='TFI Inspection - '+(state.meta.theatreName||'Site')+' - '+new Date().toLocaleDateString(); var body=buildTextReport(state); var url='mailto:?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body); var a=document.createElement('a'); a.href=url; a.click(); }, className:'rounded-lg px-3 py-2 text-sm flex items-center gap-1 btn-fill', style:{ background: canFinishActions? grad:'#94a3b8', opacity: canFinishActions?1:.5 }, disabled:!canFinishActions }, h(Icon.Mail),'Email (Text)'), h('button',{ title:'Email (HTML — copied to clipboard)', onPointerDown: async function(){ if(!canFinishActions) return; var subject='TFI Inspection - '+(state.meta.theatreName||'Site')+' - '+new Date().toLocaleDateString(); var html = buildHtmlReport(state, false); var copied=false; try{ if('ClipboardItem' in window){ var ci = new ClipboardItem({ 'text/html': new Blob([html], { type:'text/html' }) }); await navigator.clipboard.write([ci]); } else { await navigator.clipboard.writeText(html); } copied=true; }catch(e){} var note = copied ? '\n\n(HTML report copied to clipboard — paste it into your email.)' : '\n\n(If paste fails, export HTML from the app and attach.)'; var fallback = buildTextReport(state) + note; var url='mailto:?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(fallback); var a=document.createElement('a'); a.href=url; a.click(); }, className:'rounded-lg px-3 py-2 text-sm flex items-center gap-1 btn-fill', style:{ background: canFinishActions? grad:'#94a3b8', opacity: canFinishActions?1:.5 }, disabled:!canFinishActions }, h(Icon.Mail),'Email (HTML)'), h('button',{ title:'Export to PDF', onPointerDown: async function(){ if(!canFinishActions) return; await flushDrafts(); var reportContent = buildHtmlReport(state, true); var theatre = state.meta.theatreName || 'Report'; var date = new Date().toISOString().slice(0, 10); var filename = 'TFI-' + theatre.replace(/[^a-z0-9]/gi, '-') + '-' + date + '.pdf'; var options = { margin: 0.5, filename: filename, image: { type: 'jpeg', quality: 0.95 }, html2canvas: { scale: 2, useCORS: true }, jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }, pagebreak: { mode: 'avoid-all' } }; var originalScrollY = window.scrollY; window.scrollTo(0, 0); setTimeout(function(){ html2pdf().from(reportContent).set(options).save().finally(function(){ window.scrollTo(0, originalScrollY); }); }, 100); }, className:'rounded-lg px-3 py-2 text-sm flex items-center gap-1 btn-fill', style:{ background: canFinishActions? grad:'#94a3b8', opacity: canFinishActions?1:.5 }, disabled:!canFinishActions }, h(Icon.Printer),'Export PDF'), h('button',{ title:'Send to SP', onPointerDown: async function(){ await flushDrafts(); await sendJsonPlusPdfAndTxt(state); }, className:'rounded-lg px-3 py-2 text-sm flex items-center gap-1 btn-fill', style:{ background: canFinishActions? grad:'#94a3b8', opacity: canFinishActions?1:.6 }, disabled:!canFinishActions }, 'Send to SP'), (activeCat.title==='Start' ? h('button',{ title:'Reset all', onPointerDown:function(){ if(confirm('Reset all checks, photos, and comments? (Start page fields preserved except Manager Name.)')){ setState(function(s){ return { theme:s.theme, activeTab:0, answers:buildAnswers(baseCategories), meta:Object.assign({}, s.meta, { managerName:'' }), openPath:null }; }); } }, className:'rounded-lg px-3 py-2 text-sm flex items-center gap-1 btn-outline border text-red-600' }, h(Icon.Trash2),'Reset') : null) ); } var gatedNote = (!canFinishActions && (activeCat.title==='Start' || activeCat.title==='Finish')) ? h('div',{ className:'max-w-3xl mx-auto mt-1 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-1' }, 'Complete all pages to enable Email and Print.') : null; return h('div', { className:'sticky top-0 z-10 px-3 pt-3 pb-2 print:hidden', style:{ background:'linear-gradient(180deg, rgba(255,255,255,.95), rgba(255,255,255,.75))', backdropFilter:'blur(8px)'} }, h('div', { className:'flex items-center gap-2'}, h('div',{ className:'font-semibold text-slate-800 flex items-center gap-2'}, h(Icon.Palette), 'TFI Inspection'), h('div',{ className:'ml-auto flex items-center gap-2'}, themeButtons) ), h('div',{ className:'mt-2'}, h('div',{ className:'max-w-3xl mx-auto'}, h('label',{ className:'block text-xs font-semibold text-slate-500 mb-1', htmlFor:'sectionSel'},'Section'), h('div',{ className:'relative' }, h('select',{ id:'sectionSel', value:activeTab, onChange:function(e){ goTo(parseInt(e.target.value,10)); }, className:'w-full rounded-xl px-3 py-3 pr-10 text-[15px] font-semibold btn-fill', style:{ background: grad, color:'#fff' } }, state.answers.map(function(cat,idx){ return h('option',{ value:idx, style:{ color:'#0f172a', background:'#fff' }}, cat.title); })), h('div',{ className:'pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-white'}, h(Icon.ChevronDown)) ) ) ), actionBar, gatedNote ); }
 
-      function PageBody(){ if(activeCat.title==='Start') return h(StartPage); if(activeCat.title==='Finish') return h('div',null, h(FinishPage), h(SignOffBlock,{ tabIdx: activeTab })); if(activeCat.title==='Auditorium Issues'){ var audCount = Math.max(0, parseInt(state.meta.auditoriumCount||'0',10)||0) || activeCat.items.length; var itemsToShow = activeCat.items.slice(0, audCount); return h('div', null, h('div',{ className:'max-w-3xl mx-auto grid gap-3' }, itemsToShow.map(function(item,i){ return h(RowAud,{ tabIdx:activeTab, itemIdx:i, item:item }); })), h(SignOffBlock,{ tabIdx: activeTab }) ); } return h('div', null, h('div',{ className:'max-w-3xl mx-auto grid gap-3' }, activeCat.items.map(function(item,i){ return h(Row,{ tabIdx:activeTab, itemIdx:i, item:item }); })), h(SignOffBlock,{ tabIdx: activeTab }) ); }
+      function PageBody(){
+        if(activeCat.title==='Start') return h(StartPage);
+        if(activeCat.title==='Finish') return h('div',null, h(FinishPage), h(SignOffBlock,{ tabIdx: activeTab }));
+        if(activeCat.title==='Auditorium Issues'){
+          var audCount = Math.max(0, parseInt(state.meta.auditoriumCount||'0',10)||0) || activeCat.items.length;
+          var itemsToShow = activeCat.items.slice(0, audCount);
+          return h('div', null,
+            h('div',{ className:'max-w-3xl mx-auto grid gap-3' }, itemsToShow.map(function(item,i){ return h(RowAud,{ tabIdx:activeTab, itemIdx:i, item:item }); })),
+            h(SignOffBlock,{ tabIdx: activeTab })
+          );
+        }
+        var rows = activeCat.items.map(function(item,i){ return h(Row,{ tabIdx:activeTab, itemIdx:i, item:item }); });
+        if(activeCat.title==='Exterior'){
+          rows.unshift(h(WeatherBlock,{ key:'weather-block', tabIdx:activeTab, weather: activeCat.weather }));
+        }
+        return h('div', null,
+          h('div',{ className:'max-w-3xl mx-auto grid gap-3' }, rows),
+          h(SignOffBlock,{ tabIdx: activeTab })
+        );
+      }
 
       function Pager(){ return h('div',{ className:'print:hidden sticky bottom-0 inset-x-0 pb-3 px-3' }, h('div',{ className:'max-w-3xl mx-auto bg-white/90 backdrop-blur border rounded-2xl shadow-sm p-2 flex items-center gap-2' }, h('button',{ className:'flex-1 rounded-xl px-4 py-3 text-sm font-semibold btn-fill', style:{ background: grad, opacity: activeTab<=0? 0.5:1 }, disabled: activeTab<=0, onPointerDown:function(){ prevTab(); } }, h('div',{ className:'flex items-center justify-center gap-2' }, h(Icon.ChevronLeft), 'Previous')), h('div',{ className:'w-px h-8 bg-slate-200' }), h('button',{ className:'flex-1 rounded-xl px-4 py-3 text-sm font-semibold btn-fill', style:{ background: grad, opacity: activeTab>=state.answers.length-1? 0.5:1 }, disabled: activeTab>=state.answers.length-1, onPointerDown:function(){ nextTab(); } }, h('div',{ className:'flex items-center justify-center gap-2' }, 'Next', h(Icon.ChevronRight))) ) ); }
 
