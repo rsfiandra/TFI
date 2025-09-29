@@ -1,0 +1,881 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TFI Mobile Inspector</title>
+  <meta name="theme-color" content="#ff8a00" />
+  <meta name="color-scheme" content="light" />
+  <!-- Local copies of external libraries -->
+  <!-- The original HTML pulled Tailwind, React, React‑DOM and html2pdf from remote CDNs.  Those
+       references have been replaced with local files saved alongside this document.  See
+       tailwind_3.4.10.js, react.production.min.js, react-dom.production.min.js and
+       html2pdf.bundle.min.js in this folder. -->
+  <!--
+    Removed the preconnect hint to unpkg.com because scripts are now loaded from the local
+    filesystem.  Leaving the preconnect around would have no effect since the resource
+    doesn’t need a network connection.
+  -->
+  <script src="tailwind_3.4.10.js"></script>
+  <style>
+    :root { color-scheme: light; }
+    body { background:#f8fafc; }
+    @media print { .print\:hidden{display:none!important} .print\:block{display:block!important} .avoid-break{break-inside:avoid} }
+    input,textarea,select{ background:#fff; color:#0f172a; border-color:#e5e7eb; }
+    .scrollbar-thin::-webkit-scrollbar{height:6px;width:6px}
+    .scrollbar-thin::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:999px}
+
+    /* Dropdown readability */
+    #sectionSel { appearance:none; -webkit-appearance:none; -moz-appearance:none; border:0; border-radius:0.75rem; box-shadow:0 4px 12px rgba(0,0,0,.12); }
+    #sectionSel:focus { outline:none; box-shadow:0 0 0 3px rgba(255,138,0,.25), 0 4px 12px rgba(0,0,0,.12); }
+    #sectionSel option { color:#0f172a; background:#ffffff; }
+    #sectionSel:disabled { opacity:.6 }
+
+    /* Filled buttons */
+    .btn-fill { color:#fff; border:0; box-shadow:0 4px 12px rgba(0,0,0,.12); }
+    .btn-outline { background:#fff; }
+
+    /* Hide email-related buttons in the action bar (keep original behavior) */
+    button[title='Email (Text)'],
+    button[title='Email (HTML — copied to clipboard)'] {
+      display: none !important;
+    }
+  </style>
+</head>
+<body class="min-h-screen">
+  <div id="root"></div>
+
+  <script src="react.production.min.js"></script>
+  <script src="react-dom.production.min.js"></script>
+  <script src="html2pdf.bundle.min.js"></script>
+
+  <script>
+  (function(){
+    var useState = React.useState, useEffect = React.useEffect, useRef = React.useRef;
+    var h = React.createElement;
+
+    /* ===== Simple polyfills to avoid runtime issues ===== */
+    if(!Object.entries){ Object.entries = function(o){ var a=[]; for(var k in o){ if(Object.prototype.hasOwnProperty.call(o,k)) a.push([k,o[k]]); } return a; }; }
+    if(!Object.values){ Object.values = function(o){ var a=[]; for(var k in o){ if(Object.prototype.hasOwnProperty.call(o,k)) a.push(o[k]); } return a; }; }
+    if(!Object.fromEntries){ Object.fromEntries = function(arr){ var o={}; for(var i=0;i<arr.length;i++){ o[arr[i][0]] = arr[i][1]; } return o; }; }
+
+    /* ========= Env & helpers ========= */
+    var IS_COARSE_POINTER = (function(){ try { return typeof window!=="undefined" && !!window.matchMedia && window.matchMedia("(pointer: coarse)").matches; } catch(e){ return false; } })();
+    var uidCounter = 0; function uid(prefix){ uidCounter++; return (prefix||'id')+'-'+uidCounter; }
+
+    /* ================= Icons ================= */
+    var Icon = {
+      Check: function(){ return h('svg',{viewBox:'0 0 24 24',width:16,height:16,'aria-hidden':'true'}, h('path',{d:'M20 6L9 17l-5-5',stroke:'currentColor',strokeWidth:2.5,fill:'none',strokeLinecap:'round',strokeLinejoin:'round'})); },
+      ChevronDown: function(){ return h('svg',{viewBox:'0 0 24 24',width:18,height:18,'aria-hidden':'true'}, h('path',{d:'M6 9l6 6 6-6',stroke:'currentColor',strokeWidth:2,fill:'none',strokeLinecap:'round',strokeLinejoin:'round'})); },
+      ChevronLeft: function(){ return h('svg',{viewBox:'0 0 24 24',width:16,height:16,'aria-hidden':'true'}, h('path',{d:'M15 18l-6-6 6-6',stroke:'currentColor',strokeWidth:2,fill:'none',strokeLinecap:'round',strokeLinejoin:'round'})); },
+      ChevronRight: function(){ return h('svg',{viewBox:'0 0 24 24',width:16,height:16,'aria-hidden':'true'}, h('path',{d:'M9 6l6 6-6 6',stroke:'currentColor',strokeWidth:2,fill:'none',strokeLinecap:'round',strokeLinejoin:'round'})); },
+      Palette: function(){ return h('svg',{viewBox:'0 0 24 24',width:16,height:16,'aria-hidden':'true'},
+        h('path',{d:'M12 3a9 9 0 100 18c.9 0 1.5-.7 1.5-1.5S12.9 18 12 18a3 3 0 113-3h3a6 6 0 10-6-12z',fill:'currentColor',opacity:0.12}),
+        h('circle',{cx:7,cy:8.5,r:1.25,fill:'currentColor'}),
+        h('circle',{cx:9.75,cy:6.25,r:1.25,fill:'currentColor'}),
+        h('circle',{cx:12.5,cy:8,r:1.25,fill:'currentColor'}),
+        h('circle',{cx:15,cy:10,r:1.25,fill:'currentColor'})
+      ); },
+      Printer: function(){ return h('svg',{viewBox:'0 0 24 24',width:16,height:16,'aria-hidden':'true'}, h('path',{d:'M6 9V2h12v7',stroke:'currentColor',strokeWidth:2,fill:'none'}), h('path',{d:'M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 1 1 0 10h-2',stroke:'currentColor',strokeWidth:2,fill:'none'}), h('path',{d:'M6 14h12v8H6z',stroke:'currentColor',strokeWidth:2,fill:'none'})); },
+      Trash2: function(){ return h('svg',{viewBox:'0 0 24 24',width:16,height:16,'aria-hidden':'true'}, h('polyline',{points:'3 6 5 6 21 6',stroke:'currentColor',strokeWidth:2,fill:'none'}), h('path',{d:'M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6',stroke:'currentColor',strokeWidth:2,fill:'none'}), h('path',{d:'M10 11v6',stroke:'currentColor',strokeWidth:2}), h('path',{d:'M14 11v6',stroke:'currentColor',strokeWidth:2}), h('path',{d:'M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2',stroke:'currentColor',strokeWidth:2,fill:'none'})); },
+      Mail: function(){ return h('svg',{viewBox:'0 0 24 24',width:16,height:16,'aria-hidden':'true'}, h('path',{d:'M4 4h16v16H4z',stroke:'currentColor',strokeWidth:2,fill:'none'}), h('path',{d:'M4 7l8 6 8-6',stroke:'currentColor',strokeWidth:2,fill:'none'})); },
+      Camera: function(){ return h('svg',{viewBox:'0 0 24 24',width:16,height:16,'aria-hidden':'true'}, h('path',{d:'M3 7h4l2-3h6l2 3h4v12H3z',stroke:'currentColor',strokeWidth:2,fill:'none',strokeLinejoin:'round'}), h('circle',{cx:12,cy:13,r:3,stroke:'currentColor',strokeWidth:2,fill:'none'})); },
+      X: function(){ return h('svg',{viewBox:'0 0 24 24',width:14,height:14,'aria-hidden':'true'}, h('path',{d:'M18 6L6 18M6 6l12 12',stroke:'currentColor',strokeWidth:2,fill:'none',strokeLinecap:'round'})); }
+    };
+
+    /* ================= Theme ================= */
+    var THEMES = [
+      { key:'regal', name:'Regal', colors:['#ff8a00','#ff6a00'], dot:'linear-gradient(90deg,#ff8a00,#ff6a00)' },
+      { key:'ocean', name:'Ocean', colors:['#0ea5e9','#3b82f6'], dot:'linear-gradient(90deg,#0ea5e9,#3b82f6)' },
+      { key:'royal', name:'Royal', colors:['#8b5cf6','#7c3aed'], dot:'linear-gradient(90deg,#8b5cf6,#7c3aed)' },
+      { key:'emerald', name:'Emerald', colors:['#10b981','#22c55e'], dot:'linear-gradient(90deg,#10b981,#22c55e)' }
+    ];
+    function gradFrom(t){ return 'linear-gradient(90deg, '+t.colors[0]+', '+t.colors[1]+')'; }
+
+    /* ================= Data ================= */
+    var AUD_COLUMNS = ['Walls','Seats','Floors','Masking','Ceiling','Screen','Lights','Fire Extinguisher','Doors','Comfort'];
+    var baseCategories = [
+      { title:'Start', items:[] },
+      { title:'Exterior', items:[
+        'Parking lot, sidewalk, landscaping, & perimeter clean & free of tripping hazards',
+        'Parking lot and exterior lights off (or on if light level requires)',
+        'Area free of abandoned or suspicious vehicles, containers or packages',
+        'Dumpster / compactor doors closed and locked as appropriate',
+        'Dumpster / compactor areas are secured and free of unauthorized dumping',
+        'All exterior doors latched and secure'
+      ]},
+      { title:'Storage Rooms & Kitchens', items:[
+        'Stock properly contained and secured',
+        'Accessible storage areas free from tripping hazards',
+        'Floors clean, all trash removed, non-slip mats available with no tripping hazards or spills',
+        'Water heater, soda BIBs, faucets operational and leak-free',
+        'Food items dated and unexpired',
+        'Hot & Cold water available',
+        'Chemicals stored appropriately'
+      ]},
+      { title:'Lobby', items:[
+        'All lighting sources, including exit signs are operational',
+        'No evidence of roof leaks',
+        'Floors clean and in good condition with no hazards present',
+        'Floor mats are free from tripping hazards',
+        'Lobby door closers and panic hardware are operational',
+        'Standees free from tripping hazards',
+        'Seating areas are in good condition',
+        'Lobby area free of suspicious containers or packages',
+        'Lobby Impulse Equipment cords out of sight and are not a hazard',
+        'Kiosks & arcade games free of credit card skimmers, and evidence of tampering'
+      ]},
+      { title:'Food Service Areas', items:[
+        'Equipment cords are free from damage',
+        'Food prep areas are clean',
+        'Fryer locked and ready for use',
+        'Floors clean and clear of debris, have no tripping hazards',
+        'Tills are free of credit card skimmers, have no evidence of tampering'
+      ]},
+      { title:'Restrooms', items:[
+        'Restroom have a clean smell, and no overwhelming fragrance',
+        'Hardware and toilet seats are secure and operational',
+        'Toilets/urinals clean and in working order',
+        'Faucets working with hot water available',
+        'Ceiling/floor tiles are clean, secure, and in good condition',
+        'Diaper changing tables are in good condition and have strapping available',
+        'All lights are working'
+      ]},
+      { title:'Theatre Specific Items', items:[
+        'Pest control traps are present, free from defects, and have no evidence of pests',
+        'Escalators and/or elevator operational and free from defects/tripping hazards',
+        'Ash urns clean',
+        'Emergency escape routes well-lit, clean, and free of hazards',
+        'PLF auditoriums calibrated/tested/prepared (IMAX, 4DX, etc)'
+      ]},
+      { title:'Daily Manager Responsibilities', items:[
+        'Monday: Are all required licenses posted and unexpired?',
+        'Office(s) are well lit, clean and secured',
+        'Security alarm properly armed/disarmed with no errors',
+        'DVR(s) showing the correct Date/time and visible on the network',
+        'CCTV/Security Cameras working',
+        'Safes are working correctly and have no defects with locking mechanism',
+        'CC/ALD devices are accounted for and free from defects',
+        'High lift properly stored with lanyard and harness attached',
+        'High lift has manual and inspection forms',
+        'Personal protective equipment and lockout/tagout kits are available',
+        'SDS sheets are available',
+        'Server rack is secure',
+        'Fire panel is in normal status with no trouble or fault errors'
+      ]},
+      { title:'Projection Booth', items:[
+        "SPL's correct, verified, and are ready for the day's business",
+        'Screenwriter alert messages investigated and resolved',
+        'Projector trouble/alert lights investigated and addressed'
+      ]},
+      { title:'Auditorium Issues', items: Array.from({length:27}, function(_,i){ return 'Auditorium ' + (i+1); }) },
+      { title:'Finish', items:[] }
+    ];
+
+    var LSKEY = 'TFI-mobile-v7';
+    function deepClone(obj){ try { return typeof structuredClone==='function' ? structuredClone(obj) : JSON.parse(JSON.stringify(obj)); } catch(e){ return JSON.parse(JSON.stringify(obj)); } }
+    function defaultMeta(){ return { theatreName:'', siteNumber:'', auditoriumCount:'', managerName:'', photoData:'' }; }
+    function defaultSignoff(){ return { done:false, by:'', at:'' }; }
+    function ensureSignoff(so){ so = so || {}; return { done: !!so.done, by: so.by || '', at: so.at || '' }; }
+
+    // --- Global file picker setup ---
+    // Add a hidden file input to the document body once.  Selecting a photo
+    // from within a row normally causes the row to close before the file
+    // input's change event fires, so the photo is never added.  To avoid
+    // this, we use a single hidden file input that persists across
+    // renders.  The pickFile(cb) function will open the file chooser and
+    // call cb with the selected File.  While a photo is being picked,
+    // window.__isPickingPhoto is true so the global pointerdown handler
+    // does not close the row prematurely.
+    if (typeof window.__isPickingPhoto === 'undefined') {
+      window.__isPickingPhoto = false;
+    }
+    if (typeof window.__globalFileInput === 'undefined') {
+      window.__pendingFilePick = null;
+      var inp = document.createElement('input');
+      inp.type = 'file';
+      inp.accept = 'image/*';
+      inp.capture = 'environment';
+      inp.style.position = 'fixed';
+      inp.style.left = '-1000px';
+      inp.style.top = '0';
+      inp.onchange = function(ev){
+        var cb = window.__pendingFilePick;
+        var f = inp.files && inp.files[0];
+        window.__pendingFilePick = null;
+        window.__isPickingPhoto = false;
+        if(f && typeof cb === 'function'){ try{ cb(f); }catch(_e){} }
+        try{ inp.value = ''; }catch(_err){}
+      };
+      window.__globalFileInput = inp;
+      try{ document.body.appendChild(inp); }catch(_err){}
+    }
+    function pickFile(cb) {
+      window.__pendingFilePick = cb;
+      window.__isPickingPhoto = true;
+      window.__globalFileInput.click();
+    }
+
+    function buildAnswers(cats){
+      return cats.map(function(cat){
+        if(cat.title==='Start') return { title:cat.title, items:[] };
+        if(cat.title==='Auditorium Issues'){
+          return { title:cat.title, items: cat.items.map(function(q){ return { q:q, note:'', open:true, subs: Object.fromEntries(AUD_COLUMNS.map(function(k){ return [k,'ok']; })), photos: [] }; }), signoff: defaultSignoff() };
+        }
+        if(cat.title==='Finish') return { title:cat.title, items:[], signoff: defaultSignoff() };
+        return { title:cat.title, items: cat.items.map(function(q){ return { q:q, checked:true, status:'ok', note:'', open:false, photos:[] }; }), signoff: defaultSignoff() };
+      });
+    }
+
+    function migrateState(saved){
+      var base = {
+        theme: (saved && saved.theme) ? saved.theme : 'regal',
+        activeTab: (saved && typeof saved.activeTab==='number') ? saved.activeTab : 0,
+        answers: buildAnswers(baseCategories),
+        meta: defaultMeta(),
+        openPath: (saved && typeof saved.openPath==='string') ? saved.openPath : null
+      };
+      if(!saved || !Array.isArray(saved.answers)) return base;
+      var byTitle = Object.fromEntries(saved.answers.map(function(c){ return [c.title,c]; }));
+      var mergedAnswers = baseCategories.map(function(cat){
+        var oldCat = byTitle[cat.title];
+        if(cat.title==='Start') return { title:cat.title, items:[] };
+        if(cat.title==='Auditorium Issues'){
+          var byQ = Object.fromEntries(((oldCat && oldCat.items) || []).map(function(i){ return [i.q,i]; }));
+          return { title:cat.title, items: cat.items.map(function(q){
+            var old = byQ[q] || {};
+            var defSubs = Object.fromEntries(AUD_COLUMNS.map(function(k){ return [k,'ok']; }));
+            var merged = Object.assign({}, defSubs, old.subs||{});
+            // normalize legacy booleans to strings
+            AUD_COLUMNS.forEach(function(k){ if(merged[k]===true) merged[k]='ok'; else if(merged[k]===false) merged[k]=null; });
+            return { q:q, note: old.note||'', open:true, subs: merged, photos: Array.isArray(old.photos)? old.photos : [] };
+          }), signoff: ensureSignoff(oldCat && oldCat.signoff) };
+        }
+        if(cat.title==='Finish') return { title:cat.title, items:[], signoff: ensureSignoff(oldCat && oldCat.signoff) };
+        var byQ2 = Object.fromEntries(((oldCat && oldCat.items) || []).map(function(i){ return [i.q,i]; }));
+        return { title:cat.title, items: cat.items.map(function(q){ var old2 = byQ2[q] || {}; var status = (typeof old2.status==='string') ? old2.status : 'ok'; return { q:q, checked: (typeof old2.checked!=='undefined') ? !!old2.checked : true, status: status, note: old2.note||'', open:false, photos: Array.isArray(old2.photos)? old2.photos : [] }; }), signoff: ensureSignoff(oldCat && oldCat.signoff) };
+      });
+      var activeTab = Math.min(Math.max(0, (saved && typeof saved.activeTab==='number' ? saved.activeTab : 0)), mergedAnswers.length-1);
+      var meta = Object.assign({}, defaultMeta(), (saved && saved.meta)||{});
+      var openPath = (saved && typeof saved.openPath==='string') ? saved.openPath : null;
+      return { theme: base.theme, activeTab: activeTab, answers: mergedAnswers, meta: meta, openPath: openPath };
+    }
+
+    /* ================= Utils ================= */
+    function escHtml(x){ return String(x||'').replace(/[&<>\"]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]) || '&quot;'; }); }
+    async function compressImageToDataURL(file, maxW, maxH, quality){
+      maxW = maxW||1280; maxH=maxH||1280; quality = (typeof quality==='number') ? quality : 0.8;
+      var dataUrl = await new Promise(function(resolve,reject){ var fr = new FileReader(); fr.onload=function(){ resolve(fr.result); }; fr.onerror=reject; fr.readAsDataURL(file); });
+      var img = await new Promise(function(resolve,reject){ var i = new Image(); i.onload=function(){ resolve(i); }; i.onerror=reject; i.src=dataUrl; });
+      var ratio = Math.min(maxW/img.width, maxH/img.height, 1); var cw = Math.round(img.width*ratio), ch = Math.round(img.height*ratio);
+      var canvas = document.createElement('canvas'); canvas.width=cw; canvas.height=ch; var ctx = canvas.getContext('2d'); ctx.drawImage(img,0,0,cw,ch); return canvas.toDataURL('image/jpeg', quality);
+    }
+
+    /* ================= Report Builders ================= */
+    function signoffLine(cat, fallbackName){
+      if(!cat || !cat.signoff) return '';
+      if(cat.signoff.done){ var by = cat.signoff.by || fallbackName || '—'; var at = cat.signoff.at || ''; return 'Sign-off: Completed by '+by+' at '+at; }
+      return 'Sign-off: Not completed';
+    }
+
+    function buildTextReport(state){
+      var lines = []; var m = state.meta||{};
+      lines.push('TFI Inspection');
+      lines.push('Theatre: ' + (m.theatreName||'—') + ' (Site ' + (m.siteNumber||'—') + ')');
+      lines.push('Auditoria: ' + (m.auditoriumCount||'—'));
+      lines.push('Manager: ' + (m.managerName||'—'));
+      lines.push('Date: ' + new Date().toLocaleString());
+      lines.push('');
+      state.answers.forEach(function(cat){
+        if(cat.title==='Start') return;
+        lines.push('== ' + cat.title + ' ==');
+        if(cat.title==='Auditorium Issues'){
+          var audCount = Math.max(0, parseInt((state.meta&&state.meta.auditoriumCount)||'0',10)||0) || cat.items.length;
+          var use = cat.items.slice(0, audCount);
+          use.forEach(function(it,i){
+            var parts = AUD_COLUMNS.map(function(hh){
+              var v = it.subs && it.subs[hh];
+              if(v==='issue') return hh + ' (✗)';
+              if(v==='ok') return hh + ' (✓)';
+              if(v==='na') return hh + ' (N/A)';
+              return null;
+            }).filter(Boolean);
+            var subs = parts.join(', ') || 'None';
+            var photos = it.photos && it.photos.length ? ' | Photos: ' + it.photos.length : '';
+            lines.push('Auditorium ' + (i+1) + ': ' + subs + (it.note? ' | Note: ' + it.note : '') + photos);
+          });
+        } else if(cat.title!=='Finish') {
+          cat.items.forEach(function(it){
+            var sym = (it.status==='issue') ? '✗' : (it.status==='ok' ? '✓' : 'N/A');
+            var photos2 = it.photos && it.photos.length ? ' | Photos: ' + it.photos.length : '';
+            lines.push(sym + ' ' + it.q + (it.note? ' | Note: ' + it.note : '') + photos2);
+          });
+        }
+        lines.push(signoffLine(cat, m.managerName));
+        lines.push('');
+      });
+      return lines.join('\n');
+    }
+
+    function buildHtmlReport(state, includePhotosInEmail){
+      includePhotosInEmail = !!includePhotosInEmail;
+      var m = state.meta||{};
+      function imgThumb(src){ return '<img alt="photo" src="'+src+'" style="height:56px;width:auto;border:1px solid #eee;border-radius:6px"/>'; }
+      function signoffHtml(cat){ if(!cat || !cat.signoff) return ''; if(cat.signoff.done){ var by = escHtml(cat.signoff.by || m.managerName || '—'); var at = escHtml(cat.signoff.at||''); return '<div style="margin-top:8px;padding-top:6px;border-top:1px dashed #e2e8f0;font:12px system-ui,sans-serif;color:#334155">Final Sign‑Off: Completed by <b>'+by+'</b> at '+at+'</div>'; } return '<div style="margin-top:8px;padding-top:6px;border-top:1px dashed #e2e8f0;font:12px system-ui,sans-serif;color:#334155">Final Sign‑Off: Not completed</div>'; }
+
+      var miscTables = state.answers
+        .filter(function(c){return c.title!=='Start' && c.title!=='Auditorium Issues';})
+        .map(function(cat){
+          if(cat.title==='Finish'){
+            return '<h3 style="margin:16px 0 8px 0;font:600 16px/1.3 system-ui,sans-serif;color:#0f172a">Finish</h3>'+signoffHtml(cat);
+          }
+          var rows = cat.items.map(function(it){
+            var photoCells = includePhotosInEmail && it.photos && it.photos.length ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">' + it.photos.map(imgThumb).join('') + '</div>' : '';
+            var sym = (it.status==='issue') ? '✗' : (it.status==='ok' ? '✓' : 'N/A');
+            return [
+              '<tr>',
+              '<td style="padding:6px 8px;border-bottom:1px solid #eee;width:68%">'+escHtml(it.q)+photoCells+'</td>',
+              '<td style="padding:6px 8px;border-bottom:1px solid #eee;width:6%">'+sym+'</td>',
+              '<td style="padding:6px 8px;border-bottom:1px solid #eee">'+escHtml(it.note||'')+'</td>',
+              '</tr>'
+            ].join('');
+          }).join('');
+          return '<h3 style="margin:16px 0 8px 0;font:600 16px/1.3 system-ui,sans-serif;color:#0f172a">'+escHtml(cat.title)+'</h3>'+
+                 '<table style="width:100%;border-collapse:collapse">'+rows+'</table>'+signoffHtml(cat);
+        }).join('');
+
+      var audTab = state.answers.find(function(c){return c.title==='Auditorium Issues';});
+      var audCount = Math.max(0, parseInt((state.meta&&state.meta.auditoriumCount)||'0',10)||0) || (audTab ? audTab.items.length : 0);
+      var audItems = (audTab && audTab.items) ? audTab.items.slice(0, audCount) : [];
+      var audHead = '<tr><th style="text-align:left;padding:8px;border-bottom:1px solid #ddd">Auditorium</th>'+AUD_COLUMNS.map(function(hh){return '<th style="text-align:left;padding:8px;border-bottom:1px solid #ddd">'+escHtml(hh)+'</th>';}).join('')+'<th style="text-align:left;padding:8px;border-bottom:1px solid #ddd">Observations</th></tr>';
+      var audRows = audItems.map(function(it,idx){
+        var cols = AUD_COLUMNS.map(function(hh){ var v = it.subs && it.subs[hh]; var sym = (v==='issue') ? '✗' : (v==='ok' ? '✓' : 'N/A'); return '<td style="padding:6px 8px;border-bottom:1px solid #eee">'+sym+'</td>'; }).join('');
+        return [
+          '<tr>',
+          '<td style="padding:6px 8px;border-bottom:1px solid #eee">'+(idx+1)+'</td>',
+          cols,
+          '<td style="padding:6px 8px;border-bottom:1px solid #eee">'+escHtml(it.note||'')+'</td>',
+          '</tr>'
+        ].join('');
+      }).join('');
+      var audPhotos = includePhotosInEmail && audItems.length ? '<div style="margin-top:8px">'+audItems.map(function(it,idx){ return (it.photos && it.photos.length) ? '<div style="margin:8px 0"><div style="font:600 13px system-ui,sans-serif;color:#334155;margin-bottom:6px">Auditorium '+(idx+1)+' Photos</div><div style="display:flex;gap:6px;flex-wrap:wrap">'+it.photos.map(imgThumb).join('')+'</div></div>' : ''; }).join('')+'</div>' : '';
+
+      // Appendix: full-text auditorium observations (only where a note exists)
+      var audNotesList = audItems.map(function(it, idx){
+        var note = (it.note || '').trim();
+        if (!note) return '';
+        return [
+          '<div style="margin:0 0 8px 0;">',
+            '<div style="font:600 13px system-ui,sans-serif;color:#0f172a">Auditorium ', (idx+1), '</div>',
+            '<div style="white-space:pre-wrap;font:12px system-ui,sans-serif;color:#334155">', escHtml(note), '</div>',
+          '</div>'
+        ].join('');
+      }).filter(Boolean).join('');
+      var audNotesAppendix = audNotesList
+        ? [
+            '<div style="page-break-before:always"></div>',
+            '<h3 style="margin:16px 0 8px 0;font:600 16px/1.3 system-ui,sans-serif;color:#0f172a">Auditorium Observations (Full Text)</h3>',
+            audNotesList
+          ].join('')
+        : '';
+
+      var header = [
+        '<div style="font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#0f172a">',
+        '<h2 style="margin:0 0 4px 0;font:700 20px/1.3 system-ui,sans-serif">TFI Inspection Report</h2>',
+        '<div style="font-size:12px;color:#475569;margin-bottom:12px">'+ new Date().toLocaleString() +'</div>',
+        '<div style="margin:12px 0 16px 0">',
+          '<h3 style="margin:0 0 8px 0;font:600 16px/1.3 system-ui,sans-serif;color:#0f172a">Site Details</h3>'
+      ].join('');
+      var m2 = state.meta||{}; var photo = m2.photoData ? '<div style="margin:8px 0 16px 0"><img alt="Site Photo" src="'+m2.photoData+'" style="max-width:240px;height:auto;border:1px solid #eee;border-radius:8px"/></div>' : '';
+      var site = [
+          photo,
+          '<table style="width:100%;border-collapse:collapse">',
+            '<tr><td style="padding:6px 8px;border-bottom:1px solid #eee;width:140px">Theatre Name</td><td style="padding:6px 8px;border-bottom:1px solid #eee">'+escHtml(m2.theatreName||'—')+'</td></tr>',
+            '<tr><td style="padding:6px 8px;border-bottom:1px solid #eee">Site #</td><td style="padding:6px 8px;border-bottom:1px solid #eee">'+escHtml(m2.siteNumber||'—')+'</td></tr>',
+            '<tr><td style="padding:6px 8px;border-bottom:1px solid #eee">Auditorium Count</td><td style="padding:6px 8px;border-bottom:1px solid #eee">'+escHtml(m2.auditoriumCount||'—')+'</td></tr>',
+            '<tr><td style="padding:6px 8px;border-bottom:1px solid #eee">Today</td><td style="padding:6px 8px;border-bottom:1px solid #eee">'+ new Date().toLocaleDateString() +'</td></tr>',
+            '<tr><td style="padding:6px 8px;border-bottom:1px solid #eee">Manager</td><td style="padding:6px 8px;border-bottom:1px solid #eee">'+escHtml(m2.managerName||'—')+'</td></tr>',
+          '</table>',
+        '</div>'
+      ].join('');
+
+      return [
+        header,
+        site,
+        miscTables,
+        '<h3 style="margin:16px 0 8px 0;font:600 16px/1.3 system-ui,sans-serif;color:#0f172a">Auditorium Issues</h3>',
+        '<table style="width:100%;border-collapse:collapse">'+audHead+audRows+'</table>',
+        audPhotos,
+        audNotesAppendix,
+        signoffHtml(audTab),
+        '</div>'
+      ].join('');
+    }
+
+    
+    
+    /* ================= SharePoint Send (JSON + PDF + TXT) ================= */
+    var LOGIC_APP_URL = 'https://prod-182.westus.logic.azure.com:443/workflows/08a04888319e4919958e53eef2b1458e/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=PMRRfNEOHS99askKnWRCXtnBbNeptPOwuGKQTrvBsiA';
+
+    function buildReportJSON(state, includePhotos) {
+      includePhotos = !!includePhotos;
+      var s = state || {}, m = s.meta || {}, answers = Array.isArray(s.answers) ? s.answers : [];
+      function cloneItem(it) {
+        var obj = { q: it && 'q' in it ? it.q : null, note: it && it.note ? it.note : '' };
+        if (typeof it.checked !== 'undefined') obj.checked = !!it.checked;
+        if (typeof it.status !== 'undefined') obj.status = it.status;
+        if (it && it.subs) obj.subs = Object.assign({}, it.subs);
+        if (includePhotos && it && Array.isArray(it.photos)) obj.photos = it.photos.slice(0);
+        return obj;
+      }
+      var sections = answers.map(function(cat){
+        return {
+          title: cat && cat.title || '',
+          signoff: (cat && cat.signoff) ? { done: !!cat.signoff.done, by: cat.signoff.by || '', at: cat.signoff.at || '' } : null,
+          items: Array.isArray(cat && cat.items) ? cat.items.map(cloneItem) : []
+        };
+      });
+      var summary = sections.reduce(function(acc, cat){
+        var ok=0, issue=0;
+        (cat.items||[]).forEach(function(it){
+          if (it.subs && typeof it.subs === 'object') {
+            Object.keys(it.subs).forEach(function(k){ if (it.subs[k]==='issue') issue++; else if (it.subs[k]==='ok') ok++; });
+          } else {
+            if (it.status==='issue') issue++; else if (it.status==='ok') ok++;
+          }
+        });
+        acc[cat.title] = { ok: ok, issue: issue, total: ok+issue };
+        return acc;
+      }, {});
+      return {
+        schema: "tfi.mobile.inspection/1.0",
+        exportedAt: new Date().toISOString(),
+        app: { name: "TFI Mobile Inspector", source: "state+localStorage:TFI-mobile-v7" },
+        theme: s.theme || null,
+        meta: { theatreName: m.theatreName||"", siteNumber: m.siteNumber||"", auditoriumCount: m.auditoriumCount||"", managerName: m.managerName||"" },
+        activeTab: (typeof s.activeTab === 'number') ? s.activeTab : null,
+        summary: summary,
+        sections: sections
+      };
+    }
+
+    function buildTextSummary(state) {
+      var s = state || {}, m = s.meta || {}, out = [];
+      function line(t){ out.push(t); }
+      line("TFI Inspection — " + (m.theatreName||"") + " (Site " + (m.siteNumber||"") + ")");
+      line("Exported: " + new Date().toLocaleString());
+      line("");
+      if (s.summary) {
+        line("Section Summary:");
+        Object.keys(s.summary).forEach(function(k){
+          var o = s.summary[k]||{};
+          line(" - " + k + ": OK " + (o.ok||0) + " · Issues " + (o.issue||0));
+        });
+        line("");
+      }
+      if (Array.isArray(s.answers)) {
+        var issues = [];
+        s.answers.forEach(function(cat){
+          (cat.items||[]).forEach(function(it){
+            if (it && it.status === 'issue') {
+              issues.push("* " + (cat.title||'') + " — " + (it.q||'') + (it.note? (" — " + it.note) : ""));
+            } else if (it && it.subs) {
+              var subs = it.subs;
+              Object.keys(subs).forEach(function(key){ if (subs[key]==='issue') issues.push("* " + (cat.title||'') + " — " + (it.q||'') + " ["+key+"]"); });
+            }
+          });
+        });
+        if (issues.length) {
+          line("Issues:");
+          issues.forEach(function(s){ line(" " + s); });
+          line("");
+        }
+      }
+      if (Array.isArray(s.answers)) {
+        var done = s.answers.filter(function(c){return c.signoff && c.signoff.done;}).length;
+        line("Tabs Completed: " + done + " / " + s.answers.length);
+      }
+      return out.join("\n");
+    }
+
+    async function sendToLogicApp(payload) {
+      try {
+        var res = await fetch(LOGIC_APP_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json, text/plain;q=0.9,*/*;q=0.8' },
+          body: JSON.stringify(payload)
+        });
+        var text = await res.text();
+        return { ok: res.ok, status: res.status, text: text };
+      } catch (e) {
+        return { ok: false, status: 0, text: String(e) };
+      }
+    }
+
+    function spToast(msg) {
+      var t = document.getElementById('sp-toast');
+      if(!t) {
+        t = document.createElement('div');
+        t.id = 'sp-toast';
+        t.style.cssText = 'position:fixed;right:12px;bottom:64px;background:#0f172a;color:#fff;padding:8px 10px;border-radius:10px;box-shadow:0 6px 16px rgba(0,0,0,.2);z-index:1000;font:600 12px system-ui';
+        document.body.appendChild(t);
+      }
+      t.textContent = msg;
+      clearTimeout(window.__sp_to);
+      window.__sp_to = setTimeout(function(){ if(t) t.remove(); }, 2400);
+    }
+
+    function blobToBase64(blob){
+      return new Promise(function(res,rej){ var fr=new FileReader(); fr.onload=function(){ res(String(fr.result).split(',')[1]); }; fr.onerror=rej; fr.readAsDataURL(blob); });
+    }
+    async function makePdfBlob() {
+      var el = document.querySelector('main') || document.getElementById('root') || document.body;
+      var opt = { margin: 0.5, filename:'TFI-Report.pdf',
+        image:{ type: 'jpeg', quality: 0.92 }, html2canvas:{ scale:2, useCORS:true, logging:false },
+        jsPDF:{ unit:'in', format:'letter', orientation:'portrait' }
+      };
+      if (typeof html2pdf === 'undefined') throw new Error('html2pdf not loaded');
+      return html2pdf().from(el).set(opt).toPdf().output('blob');
+    }
+
+    async function sendJsonPlusPdfAndTxt(state) {
+      // Build a summary JSON payload (without embedding photos).
+      var payload = buildReportJSON(state, false);
+      // Attempt to generate a PDF of the full report (including photos).
+      try {
+        // Build an HTML version of the report with photos.
+        var reportHtml = buildHtmlReport(state, true);
+        // Options mirroring the Export PDF button.
+        var options = {
+          margin: 0.5,
+          image: { type: 'jpeg', quality: 0.95 },
+          html2canvas: { scale: 2, useCORS: true },
+          jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },
+          pagebreak: { mode: 'avoid-all' }
+        };
+        // Use html2pdf to convert the HTML into a Blob representing the PDF.
+        var pdfBlob = await html2pdf().from(reportHtml).set(options).toPdf().output('blob');
+        // Convert the Blob into a base64-encoded string for transport.
+        var b64  = await blobToBase64(pdfBlob);
+        var name = 'TFI-' + (payload.meta.theatreName || 'Report') + '-' + new Date().toISOString().slice(0,10) + '.pdf';
+        payload.pdf = { filename:name, mimeType:'application/pdf', base64:b64 };
+      } catch(e) {
+        console.warn('PDF generation failed:', e);
+      }
+      // Build a plain‑text summary for the payload.
+      try {
+        var txt = buildTextSummary(state);
+        var tname = 'TFI-' + (payload.meta.theatreName || 'Report') + '-' + new Date().toISOString().slice(0,10) + '.txt';
+        payload.txt = { filename:tname, content:txt };
+      } catch(e) {
+        console.warn('TXT summary failed:', e);
+      }
+      // Post the payload to the Logic App and show feedback.
+      var res = await sendToLogicApp(payload);
+      spToast(res.ok ? 'Sent to SharePoint ✓' : ('Failed (HTTP ' + res.status + ')'));
+      return res;
+    }
+
+    var LOGIC_APP_URL = 'https://prod-182.westus.logic.azure.com:443/workflows/08a04888319e4919958e53eef2b1458e/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=PMRRfNEOHS99askKnWRCXtnBbNeptPOwuGKQTrvBsiA';
+
+    function buildReportJSON(state, includePhotos) {
+      includePhotos = !!includePhotos;
+      var s = state || {};
+      var m = s.meta || {};
+      var answers = Array.isArray(s.answers) ? s.answers : [];
+
+      function cloneItem(it) {
+        var obj = {
+          q: it && 'q' in it ? it.q : null,
+          note: it && it.note ? it.note : ''
+        };
+        if (typeof it.checked !== 'undefined') obj.checked = !!it.checked;
+        if (typeof it.status !== 'undefined') obj.status = it.status;
+        if (it && it.subs) obj.subs = Object.assign({}, it.subs);
+        if (includePhotos && it && Array.isArray(it.photos)) obj.photos = it.photos.slice(0);
+        return obj;
+      }
+
+      var sections = answers.map(function(cat){
+        return {
+          title: cat && cat.title || '',
+          signoff: (cat && cat.signoff) ? {
+            done: !!cat.signoff.done,
+            by: cat.signoff.by || '',
+            at: cat.signoff.at || ''
+          } : null,
+          items: Array.isArray(cat && cat.items) ? cat.items.map(cloneItem) : []
+        };
+      });
+
+      var summary = sections.reduce(function(acc, cat){
+        var ok=0, issue=0;
+        (cat.items||[]).forEach(function(it){
+          if (it.subs && typeof it.subs === 'object') {
+            Object.keys(it.subs).forEach(function(k){ if (it.subs[k]==='issue') issue++; else if (it.subs[k]==='ok') ok++; });
+          } else {
+            if (it.status==='issue') issue++; else if (it.status==='ok') ok++;
+          }
+        });
+        acc[cat.title] = { ok: ok, issue: issue, total: ok+issue };
+        return acc;
+      }, {});
+
+      return {
+        schema: "tfi.mobile.inspection/1.0",
+        exportedAt: new Date().toISOString(),
+        app: { name: "TFI Mobile Inspector", source: "state+localStorage:TFI-mobile-v7" },
+        theme: s.theme || null,
+        meta: {
+          theatreName: m.theatreName || "",
+          siteNumber: m.siteNumber || "",
+          auditoriumCount: m.auditoriumCount || "",
+          managerName: m.managerName || ""
+        },
+        activeTab: (typeof s.activeTab === 'number') ? s.activeTab : null,
+        summary: summary,
+        sections: sections
+      };
+    }
+
+    async function sendToLogicApp(payload) {
+      try {
+        var res = await fetch(LOGIC_APP_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json, text/plain;q=0.9,*/*;q=0.8' },
+          body: JSON.stringify(payload)
+        });
+        var text = await res.text();
+        return { ok: res.ok, status: res.status, text: text };
+      } catch (e) {
+        return { ok: false, status: 0, text: String(e) };
+      }
+    }
+
+    function spToast(msg) {
+      var t = document.getElementById('sp-toast');
+      if(!t) {
+        t = document.createElement('div');
+        t.id = 'sp-toast';
+        t.style.cssText = 'position:fixed;right:12px;bottom:64px;background:#0f172a;color:#fff;padding:8px 10px;border-radius:10px;box-shadow:0 6px 16px rgba(0,0,0,.2);z-index:1000;font:600 12px system-ui';
+        document.body.appendChild(t);
+      }
+      t.textContent = msg;
+      clearTimeout(window.__sp_to);
+      window.__sp_to = setTimeout(function(){ if(t) t.remove(); }, 2400);
+    }
+
+
+    /* ================= App ================= */
+    function App(){
+      var initial; try{ initial = migrateState(JSON.parse(localStorage.getItem(LSKEY))); }catch(e){ initial = { theme:'regal', activeTab:0, answers:buildAnswers(baseCategories), meta:defaultMeta(), openPath:null }; }
+      var _s = useState(initial); var state = _s[0]; var setState = _s[1];
+      var theme = (THEMES.find(function(t){ return t.key===state.theme; }) || THEMES[0]);
+      var grad = gradFrom(theme);
+
+      var openPathRef = useRef(state.openPath);
+      useEffect(function(){ openPathRef.current = state.openPath; }, [state.openPath]);
+
+      // persist state
+      var saveRef = useRef(null);
+      useEffect(function(){ if(saveRef.current) clearTimeout(saveRef.current); saveRef.current = setTimeout(function(){ try{ localStorage.setItem(LSKEY, JSON.stringify(state)); }catch(e){} }, 220); return function(){ if(saveRef.current) clearTimeout(saveRef.current); }; }, [state]);
+
+      // click-away to close open rows
+      useEffect(function(){
+        function findRowEl(el){ while(el && el !== document.body){ if(el.dataset && el.dataset.rowpath) return el; el = el.parentElement; } return null; }
+        function onDocPointerDown(e){
+          // Do not close the row while a photo is being picked.  When
+          // window.__isPickingPhoto is true, the file dialog is open and we
+          // skip collapsing the open row so the file input's change event
+          // can fire.  Without this check, the row would close and the
+          // file input would be unmounted before the photo is added.
+          if (window.__isPickingPhoto) return;
+          var rp = openPathRef.current; if(!rp) return; var rpEsc = rp.replace(/"/g,'\\"'); var openEl = document.querySelector('[data-rowpath="'+rpEsc+'"]'); if(!openEl) return; var targetRow = findRowEl(e.target); if(targetRow !== openEl){ try{ var ae=document.activeElement; if(ae && typeof ae.blur==='function') ae.blur(); }catch(_e){} setState(function(s){ var n=deepClone(s); n.openPath = null; return n; }); } }
+        function onDocKey(e){ if(e.key==='Escape'){ try{ var ae=document.activeElement; if(ae && typeof ae.blur==='function') ae.blur(); }catch(_e){} setState(function(s){ if(!s.openPath) return s; var n=deepClone(s); n.openPath=null; return n; }); } }
+        document.addEventListener('pointerdown', onDocPointerDown, false);
+        document.addEventListener('keydown', onDocKey, false);
+        return function(){ document.removeEventListener('pointerdown', onDocPointerDown, false); document.removeEventListener('keydown', onDocKey, false); };
+      }, []);
+
+      // setters
+      function setThemeKey(key){ setState(function(s){ return Object.assign({}, s, { theme:key }); }); }
+      function setStatus(tabIdx, itemIdx, value){ setState(function(s){ var n=deepClone(s); n.answers[tabIdx].items[itemIdx].status=value; if(typeof n.answers[tabIdx].items[itemIdx].checked==='undefined') n.answers[tabIdx].items[itemIdx].checked = true; return n; }); }
+      function setNote(tabIdx, itemIdx, value){ setState(function(s){ var n=deepClone(s); n.answers[tabIdx].items[itemIdx].note=value; return n; }); }
+      function setAudSub(tabIdx, itemIdx, key, value){ setState(function(s){ var n=deepClone(s); n.answers[tabIdx].items[itemIdx].subs[key]=value; return n; }); }
+      function setMeta(key, value){ setState(function(s){ var nn=Object.assign({}, s.meta); nn[key]=value; return Object.assign({}, s, { meta: nn }); }); }
+      function setSignoff(tabIdx, done){ setState(function(s){ var n=deepClone(s); var cat = n.answers[tabIdx]; var so = ensureSignoff(cat.signoff); if(done){ so.done = true; so.by = n.meta.managerName || ''; so.at = new Date().toLocaleString(); } else { so.done=false; so.by=''; so.at=''; } cat.signoff = so; return n; }); }
+      async function addPhoto(tabIdx, itemIdx, file){ try { var dataUrl = await compressImageToDataURL(file,1280,1280,0.8); setState(function(s){ var n=deepClone(s); if(!n.answers[tabIdx].items[itemIdx].photos) n.answers[tabIdx].items[itemIdx].photos=[]; n.answers[tabIdx].items[itemIdx].photos.push(dataUrl); return n; }); } catch(e){} }
+      function removePhoto(tabIdx, itemIdx, photoIdx){ setState(function(s){ var n=deepClone(s); (n.answers[tabIdx].items[itemIdx].photos||[]).splice(photoIdx,1); return n; }); }
+
+      // Ensure in‑progress text fields are committed before exports/sends.
+      async function flushDrafts(){
+        try{ var ae=document.activeElement; if(ae && typeof ae.blur==='function') ae.blur(); }catch(e){}
+        await new Promise(function(res){ setTimeout(res, 150); });
+      }
+
+      var activeTab = state.activeTab; var activeCat = state.answers[activeTab];
+
+      // completion logic — per-tab sign-offs
+      var signoffTabs = state.answers.filter(function(c){ return c.title!=='Start'; });
+      var signoffDone = signoffTabs.map(function(cat){ return !!(cat.signoff && cat.signoff.done); });
+      var totalPages = signoffTabs.length;
+      var pagesDone = signoffDone.filter(function(x){ return x; }).length;
+      var pagesPct  = totalPages ? Math.round((pagesDone/totalPages)*100) : 0;
+      var canFinishActions = pagesPct===100;
+
+      // navigation
+      function goTo(idx){ setState(function(s){ var next = Math.min(Math.max(0, idx), s.answers.length-1); return Object.assign({}, s, { activeTab: next, openPath: null }); }); }
+      function prevTab(){ goTo(activeTab-1); }
+      function nextTab(){ goTo(activeTab+1); }
+
+      /* ---------- Row components ---------- */
+      function CameraButton(p){
+        var onPick = p.onPick;
+        // Use the global file picker instead of a row-local input.  When the
+        // button is pressed we invoke pickFile with the provided onPick
+        // callback.  This opens the hidden global file input and ensures
+        // the row stays open until the user has picked a photo.
+        return h('div',{ className:'flex items-center gap-2' },
+          h('button',{
+            type:'button',
+            className:'rounded-md border px-2 py-1 text-sm text-slate-700 flex items-center gap-1 btn-outline',
+            onPointerDown: function(e){ e.preventDefault(); e.stopPropagation(); pickFile(onPick); }
+          }, h(Icon.Camera),'Add Photo')
+        );
+      }
+
+      function PhotoStrip(p){ var photos=p.photos, onRemove=p.onRemove; if(!photos||!photos.length) return null; var kids = photos.map(function(src,idx){ return h('div',{ className:'relative' }, h('img',{ alt:'photo', src:src, className:'h-16 w-auto rounded-md border' }), h('button',{ type:'button', title:'Remove', onPointerDown:function(e){ e.preventDefault(); e.stopPropagation(); onRemove(idx); }, onClick:function(e){ e.preventDefault(); e.stopPropagation(); } , className:'absolute -top-2 -right-2 h-5 w-5 rounded-full border bg-white text-slate-700 flex items-center justify-center' }, h(Icon.X)) ); }); return h('div',{ className:'mt-2 flex flex-wrap gap-2' }, kids); }
+
+      function Row(p){ var tabIdx=p.tabIdx, itemIdx=p.itemIdx, item=p.item; var status = item.status||'ok'; var isIssue = status==='issue'; var isOk = status==='ok'; var isNa = status==='na'; var rp = String(tabIdx)+':'+String(itemIdx); var openNow = state.openPath===rp; var _d = useState(item.note||''); var draft=_d[0]; var setDraft=_d[1]; var ref = useRef(null); var prevOpenRef = useRef(openNow);
+        useEffect(function(){ if(openNow && ref.current && !IS_COARSE_POINTER){ try{ ref.current.focus({preventScroll:true}); }catch(e){} } },[openNow]);
+        useEffect(function(){ if(openNow) setDraft(item.note||''); },[openNow, item.note]);
+        // Save note automatically when a row transitions from open -> closed
+        useEffect(function(){ if(prevOpenRef.current && !openNow){ setNote(tabIdx, itemIdx, draft); } prevOpenRef.current = openNow; }, [openNow, draft, tabIdx, itemIdx]);
+        function commit(){ setNote(tabIdx, itemIdx, draft); }
+        function closeRow(){ setState(function(s){ var n=deepClone(s); if(n.openPath===rp) n.openPath=null; return n; }); if(ref && ref.current){ try{ ref.current.blur(); }catch(e){} } }
+        function saveAndClose(){ commit(); closeRow(); }
+        function toggleRow(){ if(openNow){ saveAndClose(); } else { setState(function(s){ var n=deepClone(s); n.openPath = rp; return n; }); } }
+        function nextStatus(cur){ var order=['ok','issue','na']; var i=order.indexOf(cur); return order[(i+1+order.length)%order.length]; }
+        function toggleStatus(){ setStatus(tabIdx,itemIdx, nextStatus(status)); }
+        return h('div',{ className:'border rounded-xl p-3 bg-white shadow-sm', style:{ borderColor: (isIssue||isOk)? theme.colors[1]:'#e5e7eb' }, 'data-rowpath': rp },
+          h('div',{ className:'flex items-start gap-3' },
+            h('button',{ type:'button', 'aria-label':'toggle status', onPointerDown:function(e){ e.preventDefault(); e.stopPropagation(); toggleStatus(); }, onClick:function(e){ e.preventDefault(); e.stopPropagation(); }, className:'mt-0.5 h-6 w-6 shrink-0 rounded-md border flex items-center justify-center', style:{ borderColor: isIssue? '#ef4444' : (isOk? theme.colors[1]:'#cbd5e1'), background: isOk? grad:'#fff', color: isOk? '#fff' : (isIssue? '#ef4444' : '#64748b') } }, isOk ? h(Icon.Check) : (isIssue ? h(Icon.X) : h('span',{style:{fontSize:10,fontWeight:700}},'N/A'))),
+            h('button',{ type:'button', 'aria-expanded':openNow, className:'text-left flex-1 select-none', onPointerDown:function(e){ e.preventDefault(); e.stopPropagation(); toggleRow(); }, onClick:function(e){ e.preventDefault(); e.stopPropagation(); }, style:{ background:'transparent', border:0, padding:0, margin:0, cursor:'pointer' } },
+              h('div',{ className:'text-[15px] leading-snug font-medium text-slate-800'}, item.q),
+              (function(){ var noteLabel = item.note ? 'Edit comment' : 'Add comment'; var count = (item.photos && Array.isArray(item.photos)) ? item.photos.length : 0; if(count){ noteLabel += ' • ' + count + ' photo' + (count>1 ? 's' : ''); } return h('div',{ className:'mt-1 text-xs text-slate-500'}, noteLabel); })()
+            ),
+            // Chevron now saves when collapsing
+            h('button',{ type:'button', 'aria-label':'expand', 'aria-expanded':openNow, onPointerDown:function(e){ e.preventDefault(); e.stopPropagation(); toggleRow(); }, onClick:function(e){ e.preventDefault(); e.stopPropagation(); }, className:'opacity-70', style:{ transform: openNow? 'rotate(180deg)':'none', transition:'transform .18s ease' } }, h(Icon.ChevronDown))
+          ),
+          h('div',{ className:'mt-2', style:{ maxHeight: openNow? 999:0, opacity: openNow?1:0, overflow:'hidden', transition:'max-height .22s ease, opacity .18s ease' } },
+            h('textarea',{ ref:ref, value:draft, onChange:function(e){ setDraft(e.target.value); }, onKeyDown:function(e){ if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); saveAndClose(); } else if((e.ctrlKey||e.metaKey) && e.key==='Enter'){ e.preventDefault(); e.stopPropagation(); saveAndClose(); } }, onBlur:function(){ setTimeout(function(){ setNote(tabIdx,itemIdx,draft); }, 80); }, placeholder:'Add comment (optional)', className:'w-full rounded-lg border p-2 text-sm resize-y min-h-[56px] max-h-[240px] overflow-auto', style:{ borderColor: draft? theme.colors[1]:'#e5e7eb', outline: draft? ('2px solid '+theme.colors[0]+'33') : 'transparent' } }),
+            h('div',{ className:'mt-2 flex items-center gap-2' }, h('button',{ type:'button', className:'rounded-lg px-3 py-1 text-sm btn-outline', onPointerDown:function(e){ e.preventDefault(); e.stopPropagation(); saveAndClose(); }, onClick:function(e){ e.preventDefault(); e.stopPropagation(); } }, 'Done'), h(CameraButton,{ onPick:function(f){ addPhoto(tabIdx,itemIdx,f); } })),
+            h(PhotoStrip,{ photos:item.photos, onRemove:function(idx){ removePhoto(tabIdx,itemIdx,idx); } })
+          )
+        ); }
+
+      function RowAud(p){ var tabIdx=p.tabIdx, itemIdx=p.itemIdx, item=p.item; var _d2 = useState(item.note||''); var draft=_d2[0]; var setDraft=_d2[1]; var refAud = useRef(null); var selectedCount = Object.values(item.subs||{}).filter(function(v){return !!v;}).length; function nextSubStatus(cur){ var order=['ok','issue','na']; var i=order.indexOf(cur); return order[(i+1+order.length)%order.length]; } function toggleKey(key){ var cur = item.subs && item.subs[key]; var next = nextSubStatus(cur); setAudSub(tabIdx,itemIdx,key,next); } return h('div',{ className:'border rounded-xl p-3 bg-white shadow-sm' },
+          h('div',{ className:'flex items-start gap-3' }, h('div',{ className:'h-6 w-6 shrink-0 rounded-md border flex items-center justify-center text-slate-500' }, String(itemIdx+1)), h('div',{ className:'text-left flex-1' }, h('div',{ className:'text-[15px] leading-snug font-medium text-slate-800'}, item.q), h('div',{ className:'mt-1 text-xs text-slate-500'}, selectedCount + '/10 checked • ' + (item.note ? 'Has comment' : 'Add comment')) ) ),
+          h('div',{ className:'mt-2' },
+            h('div',{ className:'grid grid-cols-2 sm:grid-cols-3 gap-2' }, AUD_COLUMNS.map(function(key){ var st = item.subs && item.subs[key]; var isOk = (st==='ok' || st===true); var isIssue = (st==='issue'); return h('div',{ className:'flex items-center gap-2 text-sm select-none' }, h('button',{ type:'button', onPointerDown:function(e){ e.preventDefault(); e.stopPropagation(); toggleKey(key); }, className:'h-5 w-5 rounded-md border flex items-center justify-center', style:{ borderColor: isIssue? '#ef4444' : (isOk? theme.colors[1]:'#cbd5e1'), background: isOk? grad:'#fff', color: isOk? '#fff' : (isIssue? '#ef4444' : '#334155') } }, isOk ? h(Icon.Check) : (isIssue ? h(Icon.X) : h('span',{style:{fontSize:9,fontWeight:700}},'N/A'))), h('span',null,key) ); })),
+            h('textarea',{ ref:refAud, value:draft, onChange:function(e){ setDraft(e.target.value); }, onBlur:function(){ setNote(tabIdx,itemIdx,draft); }, placeholder:'Observations (optional)', className:'mt-3 w-full rounded-lg border p-2 text-sm resize-y min-h-[96px]' }),
+            h('div',{ className:'mt-2 flex items-center gap-2' }, h('button',{ className:'rounded-lg px-3 py-1 text-sm btn-outline', onPointerDown:function(){ setNote(tabIdx,itemIdx,draft); if(refAud && refAud.current){ try{ refAud.current.blur(); }catch(e){} } } }, 'Save'), h(CameraButton,{ onPick:function(f){ addPhoto(tabIdx,itemIdx,f); } })),
+            h(PhotoStrip,{ photos:item.photos, onRemove:function(idx){ removePhoto(tabIdx,itemIdx,idx); } })
+          )
+        ); }
+
+      /* ---------- Per-tab Sign-off ---------- */
+      function SignOffBlock(p){ var tabIdx=p.tabIdx; var cat = state.answers[tabIdx]; var so = (cat && cat.signoff) ? cat.signoff : defaultSignoff(); var label = so.done ? 'Completed' : 'Click to mark complete'; return h('div',{ className:'max-w-3xl mx-auto mt-2' },
+        h('div',{ className:'bg-white border rounded-xl p-3 shadow-sm' },
+          h('div',{ className:'text-xs font-semibold text-slate-500 mb-2' }, 'Final Sign‑Off'),
+          h('div',{ className:'flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3' },
+            h('div',{ className:'text-sm text-slate-700' },
+              h('div',null,'Manager: ', h('b',null, state.meta.managerName || '—')),
+              so.done ? h('div',null,'Signed at: ', so.at) : h('div',{ className:'text-slate-500' }, 'Timestamp captured when you check the box.')
+            ),
+            h('label',{ className:'flex items-center gap-2 select-none', onPointerDown:function(e){ e.stopPropagation(); } },
+              h('input',{ type:'checkbox', className:'h-4 w-4', checked: !!so.done, onChange:function(e){ setSignoff(tabIdx, e.target.checked); } }),
+              h('span',{ className:'text-sm' }, label)
+            )
+          )
+        )
+      ); }
+
+      /* ---------- Start & Finish Pages ---------- */
+      function StartPage(){ var todayStr = new Date().toLocaleDateString(undefined,{year:'numeric', month:'2-digit', day:'2-digit'}); function Field(p){ return h('div',{ className:'bg-white border rounded-xl p-3 shadow-sm' }, h('div',{ className:'text-xs font-semibold text-slate-500 mb-1'}, p.label), p.child); } return h('div',{ className:'max-w-3xl mx-auto grid gap-3' },
+          Field({ label:'Theatre Name', child: h('input',{ defaultValue:state.meta.theatreName, onBlur:function(e){ setMeta('theatreName', e.target.value); }, placeholder:'e.g., Regal Rockville Centre', className:'w-full rounded-lg border px-3 py-2' }) }),
+          h('div',{ className:'grid grid-cols-1 sm:grid-cols-2 gap-3' },
+            Field({ label:'Site #', child: h('input',{ defaultValue:state.meta.siteNumber, onBlur:function(e){ setMeta('siteNumber', e.target.value); }, inputMode:'numeric', placeholder:'####', className:'w-full rounded-lg border px-3 py-2' }) }),
+            Field({ label:'Auditorium Count', child: h('input',{ defaultValue:state.meta.auditoriumCount, onBlur:function(e){ setMeta('auditoriumCount', e.target.value); }, inputMode:'numeric', placeholder:'e.g., 14', className:'w-full rounded-lg border px-3 py-2' }) })
+          ),
+          h('div',{ className:'grid grid-cols-1 sm:grid-cols-2 gap-3' },
+            Field({ label:'Today (auto)', child: h('input',{ value:todayStr, readOnly:true, 'aria-readonly':true, className:'w-full rounded-lg border px-3 py-2 bg-slate-50 text-slate-700' }) }),
+            Field({ label:'Name of Manager (only field cleared by Reset)', child: h('input',{ defaultValue:state.meta.managerName, onBlur:function(e){ setMeta('managerName', e.target.value); }, placeholder:'Your name', className:'w-full rounded-lg border px-3 py-2' }) })
+          ),
+          Field({ label:'Site Photo (optional)', child: h('div',{ className:'flex items-start gap-3' },
+            h('label',{ htmlFor:'start-site-photo', role:'button', className:'rounded-lg border px-2 py-1 text-sm text-slate-700 btn-outline', onPointerDown:function(){ var ae=document.activeElement; if(ae && typeof ae.blur==='function') ae.blur(); } }, 'Choose Photo'),
+            h('input',{ id:'start-site-photo', type:'file', accept:'image/*', capture:'environment', style:{ position:'absolute', width:'1px', height:'1px', opacity:0 }, onChange: async function(e){ var f=e.target.files && e.target.files[0]; if(f){ var dataUrl=await compressImageToDataURL(f,1280,1280,0.8); setMeta('photoData', dataUrl); e.target.value=''; } } }),
+            state.meta.photoData ? h('div',{ className:'flex items-center gap-2' }, h('img',{ alt:'Site', src:state.meta.photoData, className:'h-24 w-auto rounded-lg border' }), h('button',{ className:'rounded-lg border px-2 py-1 text-sm text-slate-700', onPointerDown:function(){ setMeta('photoData',''); } }, 'Remove')) : null ) }),
+          h('div',{ className:'text-xs text-slate-500 mt-1'}, 'Compressed and stored locally. Included in Print and (optional) HTML email.')
+        ); }
+
+      function Donut(p){ var raw = (p && typeof p.pct==='number') ? p.pct : 0; var pct = Math.max(0, Math.min(100, (raw|0))); var size = 160, stroke = 16, r = (size - stroke)/2, c = 2*Math.PI*r; var dash = (pct/100)*c, gap = c - dash; return h('svg',{ viewBox:'0 0 '+size+' '+size, width:size, height:size }, h('circle',{ cx:size/2, cy:size/2, r:r, fill:'none', stroke:'#e2e8f0', strokeWidth:stroke }), h('defs',null, h('linearGradient',{ id:'grad', x1:'0%', y1:'0%', x2:'100%', y2:'0%' }, h('stop',{ offset:'0%', stopColor:theme.colors[0] }), h('stop',{ offset:'100%', stopColor:theme.colors[1] }))), h('circle',{ cx:size/2, cy:size/2, r:r, fill:'none', stroke:'url(#grad)', strokeWidth:stroke, strokeLinecap:'round', strokeDasharray: (dash+' '+gap), transform:'rotate(-90 '+(size/2)+' '+(size/2)+')' }), h('text',{ x:'50%', y:'50%', dominantBaseline:'middle', textAnchor:'middle', fontSize:'28', fontWeight:'700', fill:'#0f172a' }, String(pct)+'%') ); }
+      function FinishPage(){
+        var tabs = state.answers.filter(function(c){ return c.title!=='Start'; });
+        var remaining = tabs.map(function(cat){ return { name: cat.title, done: !!(cat.signoff && cat.signoff.done) }; }).filter(function(x){ return !x.done; });
+        var simple = state.answers
+          .filter(function(c){ return c.title!=='Start' && c.title!=='Finish' && c.title!=='Auditorium Issues'; })
+          .map(function(cat){ var its = (cat.items||[]).filter(function(it){ return it.status==='issue'; }); return { title: cat.title, count: its.length, items: its.map(function(it){ return it.q; }) }; });
+        var audTab = state.answers.find(function(c){ return c.title==='Auditorium Issues'; });
+        var audCount = Math.max(0, parseInt(state.meta.auditoriumCount||'0',10)||0) || (audTab ? audTab.items.length : 0);
+        var audItems = (audTab && audTab.items) ? audTab.items.slice(0, audCount) : [];
+        var audDetails = audItems.map(function(it, idx){ var cols = AUD_COLUMNS.filter(function(k){ return it.subs && it.subs[k]==='issue'; }); return { index: idx+1, cols: cols }; }).filter(function(d){ return d.cols.length>0; });
+        var audTotal = audDetails.reduce(function(acc,d){ return acc + d.cols.length; }, 0);
+        var audPerCol = {}; AUD_COLUMNS.forEach(function(k){ audPerCol[k] = audItems.reduce(function(a,it){ return a + ((it.subs && it.subs[k]==='issue')?1:0); }, 0); });
+        return h('div',{ className:'max-w-3xl mx-auto grid gap-3' },
+          h('div',{ className:'bg-white border rounded-2xl p-4 shadow-sm flex items-center gap-4' }, h(Donut,{ pct: (function(){ var done = state.answers.filter(function(c){return c.title!=='Start' && c.signoff && c.signoff.done;}).length; var total = state.answers.filter(function(c){return c.title!=='Start';}).length; return total? Math.round(done/total*100):0; })() }), h('div',{ className:'flex-1' }, h('div',{ className:'text-xl font-bold text-slate-800' }, 'Completion'), h('div',{ className:'text-slate-600' }, (function(){ var done = state.answers.filter(function(c){return c.title!=='Start' && c.signoff && c.signoff.done;}).length; var total = state.answers.filter(function(c){return c.title!=='Start';}).length; return done+' / '+total+' pages complete'; })()), h('div',{ className:'mt-2 h-3 w-full rounded-full bg-slate-200 overflow-hidden' }, h('div',{ className:'h-3', style:{ width: (function(){ var done = state.answers.filter(function(c){return c.title!=='Start' && c.signoff && c.signoff.done;}).length; var total = state.answers.filter(function(c){return c.title!=='Start';}).length; return total? Math.round(done/total*100):0; })()+'%', background: grad } })))) ,
+          h('div',{ className:'bg-white border rounded-2xl p-4 shadow-sm' }, h('div',{ className:'text-sm font-semibold text-slate-600 mb-2' }, 'Issues Summary'), h('div',{ className:'grid grid-cols-1 sm:grid-cols-2 gap-2' }, simple.map(function(row){ return h('div',{ className:'flex items-center justify-between text-sm text-slate-700 border rounded-md px-2 py-1 bg-white' }, h('span',null,row.title), h('span',{ className: row.count ? 'text-red-600 font-semibold' : 'text-slate-500' }, String(row.count)+' issue'+(row.count===1?'':'s')) ); })), (audTab ? h('div',{ className:'mt-3' }, h('div',{ className:'text-sm font-semibold text-slate-600 mb-1' }, 'Auditorium Issues'), h('div',{ className:'text-sm text-slate-700' }, (audTotal||0)+' issue'+(audTotal===1?'':'s')+' across '+audItems.length+' auditorium'+(audItems.length===1?'':'s')), h('div',{ className:'mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2' }, AUD_COLUMNS.map(function(k){ var c = audPerCol[k]||0; return h('div',{ className:'text-xs border rounded px-2 py-1 bg-white flex items-center justify-between' }, h('span',null,k), h('span',{ className: c ? 'text-red-600 font-semibold' : 'text-slate-500' }, String(c)) ); })), audDetails.length ? h('div',{ className:'mt-2 text-xs text-slate-600' }, audDetails.map(function(d){ return h('div',{ className:'border rounded-md px-2 py-1 bg-white mb-1' }, 'Auditorium ', String(d.index), ': ', d.cols.join(', ')); })) : null ) : null) ), h('div',{ className:'bg-white border rounded-2xl p-4 shadow-sm' }, h('div',{ className:'text-sm font-semibold text-slate-600 mb-2' }, 'Pages remaining'), remaining.length ? h('ul', { className:'list-disc pl-5 space-y-1 text-slate-700' }, remaining.map(function(r){ return h('li', null, r.name); })) : h('div',{ className:'text-emerald-700' }, 'All set! You can email or print now.') ) ); }
+
+      /* ---------- Header, Body, Pager ---------- */
+      function Header(){ var themeButtons = THEMES.map(function(t){ return h('button',{ title:t.name, onPointerDown:function(e){ e.preventDefault(); setThemeKey(t.key); }, className:'h-6 w-6 rounded-full border', style:{ background:t.dot, borderColor: state.theme===t.key? theme.colors[1]:'#e5e7eb', boxShadow: state.theme===t.key? ('0 0 0 3px '+theme.colors[0]+'44') : 'none' } }); }); var actionBar = null; if(activeCat.title==='Start' || activeCat.title==='Finish'){ actionBar = h('div',{ className:'mt-2 flex items-center gap-2 max-w-3xl mx-auto'}, h('button',{ title:'Email (Text)', onPointerDown:function(){ if(!canFinishActions) return; var subject='TFI Inspection - '+(state.meta.theatreName||'Site')+' - '+new Date().toLocaleDateString(); var body=buildTextReport(state); var url='mailto:?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body); var a=document.createElement('a'); a.href=url; a.click(); }, className:'rounded-lg px-3 py-2 text-sm flex items-center gap-1 btn-fill', style:{ background: canFinishActions? grad:'#94a3b8', opacity: canFinishActions?1:.5 }, disabled:!canFinishActions }, h(Icon.Mail),'Email (Text)'), h('button',{ title:'Email (HTML — copied to clipboard)', onPointerDown: async function(){ if(!canFinishActions) return; var subject='TFI Inspection - '+(state.meta.theatreName||'Site')+' - '+new Date().toLocaleDateString(); var html = buildHtmlReport(state, false); var copied=false; try{ if('ClipboardItem' in window){ var ci = new ClipboardItem({ 'text/html': new Blob([html], { type:'text/html' }) }); await navigator.clipboard.write([ci]); } else { await navigator.clipboard.writeText(html); } copied=true; }catch(e){} var note = copied ? '\n\n(HTML report copied to clipboard — paste it into your email.)' : '\n\n(If paste fails, export HTML from the app and attach.)'; var fallback = buildTextReport(state) + note; var url='mailto:?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(fallback); var a=document.createElement('a'); a.href=url; a.click(); }, className:'rounded-lg px-3 py-2 text-sm flex items-center gap-1 btn-fill', style:{ background: canFinishActions? grad:'#94a3b8', opacity: canFinishActions?1:.5 }, disabled:!canFinishActions }, h(Icon.Mail),'Email (HTML)'), h('button',{ title:'Export to PDF', onPointerDown: async function(){ if(!canFinishActions) return; await flushDrafts(); var reportContent = buildHtmlReport(state, true); var theatre = state.meta.theatreName || 'Report'; var date = new Date().toISOString().slice(0, 10); var filename = 'TFI-' + theatre.replace(/[^a-z0-9]/gi, '-') + '-' + date + '.pdf'; var options = { margin: 0.5, filename: filename, image: { type: 'jpeg', quality: 0.95 }, html2canvas: { scale: 2, useCORS: true }, jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }, pagebreak: { mode: 'avoid-all' } }; var originalScrollY = window.scrollY; window.scrollTo(0, 0); setTimeout(function(){ html2pdf().from(reportContent).set(options).save().finally(function(){ window.scrollTo(0, originalScrollY); }); }, 100); }, className:'rounded-lg px-3 py-2 text-sm flex items-center gap-1 btn-fill', style:{ background: canFinishActions? grad:'#94a3b8', opacity: canFinishActions?1:.5 }, disabled:!canFinishActions }, h(Icon.Printer),'Export PDF'), h('button',{ title:'Send to SP', onPointerDown: async function(){ await flushDrafts(); await sendJsonPlusPdfAndTxt(state); }, className:'rounded-lg px-3 py-2 text-sm flex items-center gap-1 btn-fill', style:{ background: canFinishActions? grad:'#94a3b8', opacity: canFinishActions?1:.6 }, disabled:!canFinishActions }, 'Send to SP'), (activeCat.title==='Start' ? h('button',{ title:'Reset all', onPointerDown:function(){ if(confirm('Reset all checks, photos, and comments? (Start page fields preserved except Manager Name.)')){ setState(function(s){ return { theme:s.theme, activeTab:0, answers:buildAnswers(baseCategories), meta:Object.assign({}, s.meta, { managerName:'' }), openPath:null }; }); } }, className:'rounded-lg px-3 py-2 text-sm flex items-center gap-1 btn-outline border text-red-600' }, h(Icon.Trash2),'Reset') : null) ); } var gatedNote = (!canFinishActions && (activeCat.title==='Start' || activeCat.title==='Finish')) ? h('div',{ className:'max-w-3xl mx-auto mt-1 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-1' }, 'Complete all pages to enable Email and Print.') : null; return h('div', { className:'sticky top-0 z-10 px-3 pt-3 pb-2 print:hidden', style:{ background:'linear-gradient(180deg, rgba(255,255,255,.95), rgba(255,255,255,.75))', backdropFilter:'blur(8px)'} }, h('div', { className:'flex items-center gap-2'}, h('div',{ className:'font-semibold text-slate-800 flex items-center gap-2'}, h(Icon.Palette), 'TFI Inspection'), h('div',{ className:'ml-auto flex items-center gap-2'}, themeButtons) ), h('div',{ className:'mt-2'}, h('div',{ className:'max-w-3xl mx-auto'}, h('label',{ className:'block text-xs font-semibold text-slate-500 mb-1', htmlFor:'sectionSel'},'Section'), h('div',{ className:'relative' }, h('select',{ id:'sectionSel', value:activeTab, onChange:function(e){ goTo(parseInt(e.target.value,10)); }, className:'w-full rounded-xl px-3 py-3 pr-10 text-[15px] font-semibold btn-fill', style:{ background: grad, color:'#fff' } }, state.answers.map(function(cat,idx){ return h('option',{ value:idx, style:{ color:'#0f172a', background:'#fff' }}, cat.title); })), h('div',{ className:'pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-white'}, h(Icon.ChevronDown)) ) ) ), actionBar, gatedNote ); }
+
+      function PageBody(){ if(activeCat.title==='Start') return h(StartPage); if(activeCat.title==='Finish') return h('div',null, h(FinishPage), h(SignOffBlock,{ tabIdx: activeTab })); if(activeCat.title==='Auditorium Issues'){ var audCount = Math.max(0, parseInt(state.meta.auditoriumCount||'0',10)||0) || activeCat.items.length; var itemsToShow = activeCat.items.slice(0, audCount); return h('div', null, h('div',{ className:'max-w-3xl mx-auto grid gap-3' }, itemsToShow.map(function(item,i){ return h(RowAud,{ tabIdx:activeTab, itemIdx:i, item:item }); })), h(SignOffBlock,{ tabIdx: activeTab }) ); } return h('div', null, h('div',{ className:'max-w-3xl mx-auto grid gap-3' }, activeCat.items.map(function(item,i){ return h(Row,{ tabIdx:activeTab, itemIdx:i, item:item }); })), h(SignOffBlock,{ tabIdx: activeTab }) ); }
+
+      function Pager(){ return h('div',{ className:'print:hidden sticky bottom-0 inset-x-0 pb-3 px-3' }, h('div',{ className:'max-w-3xl mx-auto bg-white/90 backdrop-blur border rounded-2xl shadow-sm p-2 flex items-center gap-2' }, h('button',{ className:'flex-1 rounded-xl px-4 py-3 text-sm font-semibold btn-fill', style:{ background: grad, opacity: activeTab<=0? 0.5:1 }, disabled: activeTab<=0, onPointerDown:function(){ prevTab(); } }, h('div',{ className:'flex items-center justify-center gap-2' }, h(Icon.ChevronLeft), 'Previous')), h('div',{ className:'w-px h-8 bg-slate-200' }), h('button',{ className:'flex-1 rounded-xl px-4 py-3 text-sm font-semibold btn-fill', style:{ background: grad, opacity: activeTab>=state.answers.length-1? 0.5:1 }, disabled: activeTab>=state.answers.length-1, onPointerDown:function(){ nextTab(); } }, h('div',{ className:'flex items-center justify-center gap-2' }, 'Next', h(Icon.ChevronRight))) ) ); }
+
+      // ===== Dev sanity tests (non-blocking) =====
+      useEffect(function(){
+        try{
+          var t = buildTextReport({ meta:{}, answers:[{title:'Start',items:[]},{title:'Exterior',items:[{q:'A',status:'ok',note:'',photos:[]}],signoff:{done:true}},{title:'Finish',items:[],signoff:{done:false}}] });
+          console.assert(typeof t==='string' && t.indexOf('\n')!==-1, 'buildTextReport returns string with newlines');
+
+          var escT = escHtml('<>&"');
+          console.assert(escT.indexOf('&lt;')!==-1 && escT.indexOf('&gt;')!==-1 && escT.indexOf('&amp;')!==-1 && escT.indexOf('&quot;')!==-1, 'escHtml escapes critical chars');
+
+          var rpTest = '0:"1';
+          var rpEsc = rpTest.replace(/"/g,'\\"');
+          console.assert(rpEsc==='0:\\"1', 'attribute selector escaping works');
+
+          // NEW: ensure PhotoStrip is a function and createElement call stays valid
+          console.assert(typeof PhotoStrip==='function', 'PhotoStrip is a component function');
+
+          // Ensure N/A renders in HTML for simple rows
+          var cfoeNa = buildHtmlReport({ meta:{}, answers:[{title:'Exterior',items:[{q:'Q',status:'na',note:'',photos:[]}],signoff:{done:false}}] }, false);
+          console.assert(cfoeNa.indexOf('>N/A<')!==-1, 'N/A renders correctly');
+
+          // Report HTML sanity
+          var sanity = buildHtmlReport({ meta:{}, answers:[{title:'Finish',items:[],signoff:{done:false}}] }, false);
+          console.assert(sanity.indexOf('undefined')===-1 && sanity.indexOf('NaN')===-1, 'report output is sane');
+        }catch(e){ console.warn('Dev tests failed', e); }
+      }, []);
+
+      return h('div',{ className:'min-h-screen bg-slate-50 flex flex-col' }, h(Header), h('div',{ className:'flex-1 px-3 pb-24 print:hidden' }, h(PageBody) ), h('div',{ className:'print:block hidden p-6 text-slate-900', dangerouslySetInnerHTML:{ __html: buildHtmlReport({meta:state.meta, answers:state.answers}, true) } }), h(Pager), h('div',{ className:'pointer-events-none fixed inset-x-0 top-0 h-1 print:hidden', style:{ background: grad } }) );
+    }
+
+    var root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(h(App));
+  })();
+  </script>
+</body>
+</html>
