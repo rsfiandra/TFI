@@ -86,6 +86,27 @@
 
     /* ================= Data ================= */
     var AUD_COLUMNS = ['Walls','Seats','Floors','Masking','Ceiling','Screen','Lights','Fire Extinguisher','Doors','Comfort'];
+    var WEATHER_OPTIONS = ['Clear','Dry','Overcast','Rain','Sleet','Snow','High Winds'];
+    function defaultWeather(){
+      return {
+        conditions: Object.fromEntries(WEATHER_OPTIONS.map(function(opt){ return [opt,false]; })),
+        note: ''
+      };
+    }
+    function ensureWeather(weather){
+      var base = defaultWeather();
+      if(weather && typeof weather === 'object'){
+        if(weather.conditions && typeof weather.conditions === 'object'){
+          WEATHER_OPTIONS.forEach(function(opt){
+            if(typeof weather.conditions[opt] === 'boolean'){
+              base.conditions[opt] = weather.conditions[opt];
+            }
+          });
+        }
+        if(typeof weather.note === 'string'){ base.note = weather.note; }
+      }
+      return base;
+    }
     var baseCategories = [
       { title:'Start', items:[] },
       { title:'Exterior', items:[
@@ -215,7 +236,9 @@
           return { title:cat.title, items: cat.items.map(function(q){ return { q:q, note:'', open:true, subs: Object.fromEntries(AUD_COLUMNS.map(function(k){ return [k,'ok']; })), photos: [] }; }), signoff: defaultSignoff() };
         }
         if(cat.title==='Finish') return { title:cat.title, items:[], signoff: defaultSignoff() };
-        return { title:cat.title, items: cat.items.map(function(q){ return { q:q, checked:true, status:'ok', note:'', open:false, photos:[] }; }), signoff: defaultSignoff() };
+        var general = { title:cat.title, items: cat.items.map(function(q){ return { q:q, checked:true, status:'ok', note:'', open:false, photos:[] }; }), signoff: defaultSignoff() };
+        if(cat.title==='Exterior') general.weather = defaultWeather();
+        return general;
       });
     }
 
@@ -245,7 +268,9 @@
         }
         if(cat.title==='Finish') return { title:cat.title, items:[], signoff: ensureSignoff(oldCat && oldCat.signoff) };
         var byQ2 = Object.fromEntries(((oldCat && oldCat.items) || []).map(function(i){ return [i.q,i]; }));
-        return { title:cat.title, items: cat.items.map(function(q){ var old2 = byQ2[q] || {}; var status = (typeof old2.status==='string') ? old2.status : 'ok'; return { q:q, checked: (typeof old2.checked!=='undefined') ? !!old2.checked : true, status: status, note: old2.note||'', open:false, photos: Array.isArray(old2.photos)? old2.photos : [] }; }), signoff: ensureSignoff(oldCat && oldCat.signoff) };
+        var mergedGeneral = { title:cat.title, items: cat.items.map(function(q){ var old2 = byQ2[q] || {}; var status = (typeof old2.status==='string') ? old2.status : 'ok'; return { q:q, checked: (typeof old2.checked!=='undefined') ? !!old2.checked : true, status: status, note: old2.note||'', open:false, photos: Array.isArray(old2.photos)? old2.photos : [] }; }), signoff: ensureSignoff(oldCat && oldCat.signoff) };
+        if(cat.title==='Exterior') mergedGeneral.weather = ensureWeather(oldCat && oldCat.weather);
+        return mergedGeneral;
       });
       var activeTab = Math.min(Math.max(0, (saved && typeof saved.activeTab==='number' ? saved.activeTab : 0)), mergedAnswers.length-1);
       var meta = Object.assign({}, defaultMeta(), (saved && saved.meta)||{});
@@ -281,6 +306,15 @@
       state.answers.forEach(function(cat){
         if(cat.title==='Start') return;
         lines.push('== ' + cat.title + ' ==');
+        if(cat.title==='Exterior' && cat.weather){
+          var weather = ensureWeather(cat.weather);
+          var selected = WEATHER_OPTIONS.filter(function(opt){ return weather.conditions && weather.conditions[opt]; });
+          var selectedStr = selected.length ? selected.join(', ') : 'None selected';
+          lines.push('Weather Conditions: ' + selectedStr);
+          if(weather.note){
+            lines.push('Weather Observations: ' + weather.note);
+          }
+        }
         if(cat.title==='Auditorium Issues'){
           var audCount = Math.max(0, parseInt((state.meta&&state.meta.auditoriumCount)||'0',10)||0) || cat.items.length;
           var use = cat.items.slice(0, audCount);
@@ -321,6 +355,18 @@
           if(cat.title==='Finish'){
             return '<h3 style="margin:16px 0 8px 0;font:600 16px/1.3 system-ui,sans-serif;color:#0f172a">Finish</h3>'+signoffHtml(cat);
           }
+          var weatherHtml = '';
+          if(cat.title==='Exterior' && cat.weather){
+            var weather = ensureWeather(cat.weather);
+            var selected = WEATHER_OPTIONS.filter(function(opt){ return weather.conditions && weather.conditions[opt]; });
+            var selectedText = selected.length ? selected.join(', ') : 'None selected';
+            var noteText = (weather.note || '').trim();
+            weatherHtml = '<div style="margin:8px 0;padding:10px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;font:12px/1.5 system-ui,sans-serif;color:#334155">'
+              + '<div style="font-weight:600;color:#0f172a;margin-bottom:4px">Weather Conditions</div>'
+              + '<div>' + escHtml(selectedText) + '</div>'
+              + (noteText ? '<div style="margin-top:6px"><span style="font-weight:600;color:#0f172a">Observations:</span> ' + escHtml(noteText) + '</div>' : '')
+              + '</div>';
+          }
           var rows = cat.items.map(function(it){
             var photoCells = includePhotosInEmail && it.photos && it.photos.length ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">' + it.photos.map(imgThumb).join('') + '</div>' : '';
             var sym = (it.status==='issue') ? '✗' : (it.status==='ok' ? '✓' : 'N/A');
@@ -333,6 +379,7 @@
             ].join('');
           }).join('');
           return '<h3 style="margin:16px 0 8px 0;font:600 16px/1.3 system-ui,sans-serif;color:#0f172a">'+escHtml(cat.title)+'</h3>'+
+                 weatherHtml +
                  '<table style="width:100%;border-collapse:collapse">'+rows+'</table>'+signoffHtml(cat);
         }).join('');
 
@@ -420,12 +467,23 @@
         if (includePhotos && it && Array.isArray(it.photos)) obj.photos = it.photos.slice(0);
         return obj;
       }
-      var sections = answers.map(function(cat){
+      function cloneWeather(weather){
+        var w = ensureWeather(weather);
         return {
+          conditions: Object.assign({}, w.conditions),
+          note: w.note || ''
+        };
+      }
+      var sections = answers.map(function(cat){
+        var section = {
           title: cat && cat.title || '',
           signoff: (cat && cat.signoff) ? { done: !!cat.signoff.done, by: cat.signoff.by || '', at: cat.signoff.at || '' } : null,
           items: Array.isArray(cat && cat.items) ? cat.items.map(cloneItem) : []
         };
+        if(cat && cat.weather){
+          section.weather = cloneWeather(cat.weather);
+        }
+        return section;
       });
       var summary = sections.reduce(function(acc, cat){
         var ok=0, issue=0;
@@ -588,8 +646,16 @@
         return obj;
       }
 
-      var sections = answers.map(function(cat){
+      function cloneWeather(weather){
+        var w = ensureWeather(weather);
         return {
+          conditions: Object.assign({}, w.conditions),
+          note: w.note || ''
+        };
+      }
+
+      var sections = answers.map(function(cat){
+        var section = {
           title: cat && cat.title || '',
           signoff: (cat && cat.signoff) ? {
             done: !!cat.signoff.done,
@@ -598,6 +664,10 @@
           } : null,
           items: Array.isArray(cat && cat.items) ? cat.items.map(cloneItem) : []
         };
+        if(cat && cat.weather){
+          section.weather = cloneWeather(cat.weather);
+        }
+        return section;
       });
 
       var summary = sections.reduce(function(acc, cat){
@@ -665,6 +735,8 @@
       var theme = (THEMES.find(function(t){ return t.key===state.theme; }) || THEMES[0]);
       var grad = gradFrom(theme);
 
+      var finishRef = useRef(null);
+
       var openPathRef = useRef(state.openPath);
       useEffect(function(){ openPathRef.current = state.openPath; }, [state.openPath]);
 
@@ -698,11 +770,49 @@
       function setSignoff(tabIdx, done){ setState(function(s){ var n=deepClone(s); var cat = n.answers[tabIdx]; var so = ensureSignoff(cat.signoff); if(done){ so.done = true; so.by = n.meta.managerName || ''; so.at = new Date().toLocaleString(); } else { so.done=false; so.by=''; so.at=''; } cat.signoff = so; return n; }); }
       async function addPhoto(tabIdx, itemIdx, file){ try { var dataUrl = await compressImageToDataURL(file,1280,1280,0.8); setState(function(s){ var n=deepClone(s); if(!n.answers[tabIdx].items[itemIdx].photos) n.answers[tabIdx].items[itemIdx].photos=[]; n.answers[tabIdx].items[itemIdx].photos.push(dataUrl); return n; }); } catch(e){} }
       function removePhoto(tabIdx, itemIdx, photoIdx){ setState(function(s){ var n=deepClone(s); (n.answers[tabIdx].items[itemIdx].photos||[]).splice(photoIdx,1); return n; }); }
+      function setWeatherCondition(tabIdx, option, value){ setState(function(s){ var n=deepClone(s); var cat=n.answers[tabIdx]; if(!cat) return s; cat.weather = ensureWeather(cat.weather); cat.weather.conditions[option] = !!value; return n; }); }
+      function setWeatherNote(tabIdx, value){ setState(function(s){ var n=deepClone(s); var cat=n.answers[tabIdx]; if(!cat) return s; cat.weather = ensureWeather(cat.weather); cat.weather.note = value; return n; }); }
 
       // Ensure in‑progress text fields are committed before exports/sends.
       async function flushDrafts(){
         try{ var ae=document.activeElement; if(ae && typeof ae.blur==='function') ae.blur(); }catch(e){}
         await new Promise(function(res){ setTimeout(res, 150); });
+      }
+
+      async function exportFinishAsPdfExact(){
+        var node = finishRef && finishRef.current;
+        if(!node) return;
+
+        var exportCard = document.querySelector('[data-export-card]');
+        var prevDisplay = exportCard ? (exportCard.style.display || '') : '';
+        if(exportCard) exportCard.style.display = 'none';
+
+        try {
+          var m = state.meta || {};
+          var theatre = (m.theatreName || 'Report').replace(/[^a-z0-9]/gi, '-');
+          var fileDate = new Date().toISOString().slice(0, 10);
+          var filename = 'TFI-' + theatre + '-' + fileDate + '-finish.pdf';
+
+          var deviceScale = 2;
+          try {
+            var dpr = window.devicePixelRatio || 1;
+            deviceScale = Math.max(2, Math.min(3, Math.ceil(dpr)));
+          } catch (e) {}
+
+          var worker = html2pdf();
+          worker.set({
+            margin: 0.5,
+            filename: filename,
+            image: { type: 'jpeg', quality: 0.95 },
+            html2canvas: { scale: deviceScale, useCORS: true, backgroundColor: '#ffffff' },
+            jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },
+            pagebreak: { mode: ['css', 'legacy'] }
+          });
+
+          await worker.from(node).save();
+        } finally {
+          if(exportCard) exportCard.style.display = prevDisplay;
+        }
       }
 
       var activeTab = state.activeTab; var activeCat = state.answers[activeTab];
@@ -738,6 +848,12 @@
 
       function PhotoStrip(p){ var photos=p.photos, onRemove=p.onRemove; if(!photos||!photos.length) return null; var kids = photos.map(function(src,idx){ return h('div',{ className:'relative' }, h('img',{ alt:'photo', src:src, className:'h-16 w-auto rounded-md border' }), h('button',{ type:'button', title:'Remove', onPointerDown:function(e){ e.preventDefault(); e.stopPropagation(); onRemove(idx); }, onClick:function(e){ e.preventDefault(); e.stopPropagation(); } , className:'absolute -top-2 -right-2 h-5 w-5 rounded-full border bg-white text-slate-700 flex items-center justify-center' }, h(Icon.X)) ); }); return h('div',{ className:'mt-2 flex flex-wrap gap-2' }, kids); }
 
+      function WeatherBlock(p){ var tabIdx=p.tabIdx; var weather=ensureWeather(p.weather); return h('div',{ className:'bg-white border rounded-xl p-3 shadow-sm avoid-break', style:{ pageBreakInside:'avoid', breakInside:'avoid-page' } },
+          h('div',{ className:'text-xs font-semibold text-slate-500 mb-2' }, 'Weather Conditions'),
+          h('div',{ className:'flex flex-wrap gap-x-4 gap-y-2' }, WEATHER_OPTIONS.map(function(opt){ var checked = !!(weather.conditions && weather.conditions[opt]); return h('label',{ key:opt, className:'flex items-center gap-2 text-sm select-none' }, h('input',{ type:'checkbox', className:'h-4 w-4', checked:checked, onChange:function(e){ setWeatherCondition(tabIdx, opt, e.target.checked); } }), h('span',null,opt)); })),
+          h('div',{ className:'mt-3' }, h('div',{ className:'text-xs font-semibold text-slate-500 mb-1' }, 'Observations (optional)'), h('textarea',{ value:weather.note||'', onChange:function(e){ setWeatherNote(tabIdx, e.target.value); }, placeholder:'Observations (optional)', className:'w-full rounded-lg border p-2 text-sm resize-y min-h-[72px]' }))
+        ); }
+
       function Row(p){ var tabIdx=p.tabIdx, itemIdx=p.itemIdx, item=p.item; var status = item.status||'ok'; var isIssue = status==='issue'; var isOk = status==='ok'; var isNa = status==='na'; var rp = String(tabIdx)+':'+String(itemIdx); var openNow = state.openPath===rp; var _d = useState(item.note||''); var draft=_d[0]; var setDraft=_d[1]; var ref = useRef(null); var prevOpenRef = useRef(openNow);
         useEffect(function(){ if(openNow && ref.current && !IS_COARSE_POINTER){ try{ ref.current.focus({preventScroll:true}); }catch(e){} } },[openNow]);
         useEffect(function(){ if(openNow) setDraft(item.note||''); },[openNow, item.note]);
@@ -749,7 +865,7 @@
         function toggleRow(){ if(openNow){ saveAndClose(); } else { setState(function(s){ var n=deepClone(s); n.openPath = rp; return n; }); } }
         function nextStatus(cur){ var order=['ok','issue','na']; var i=order.indexOf(cur); return order[(i+1+order.length)%order.length]; }
         function toggleStatus(){ setStatus(tabIdx,itemIdx, nextStatus(status)); }
-        return h('div',{ className:'border rounded-xl p-3 bg-white shadow-sm', style:{ borderColor: (isIssue||isOk)? theme.colors[1]:'#e5e7eb' }, 'data-rowpath': rp },
+        return h('div',{ className:'border rounded-xl p-3 bg-white shadow-sm avoid-break', style:{ borderColor: (isIssue||isOk)? theme.colors[1]:'#e5e7eb', pageBreakInside:'avoid', breakInside:'avoid-page' }, 'data-rowpath': rp },
           h('div',{ className:'flex items-start gap-3' },
             h('button',{ type:'button', 'aria-label':'toggle status', onPointerDown:function(e){ e.preventDefault(); e.stopPropagation(); toggleStatus(); }, onClick:function(e){ e.preventDefault(); e.stopPropagation(); }, className:'mt-0.5 h-6 w-6 shrink-0 rounded-md border flex items-center justify-center', style:{ borderColor: isIssue? '#ef4444' : (isOk? theme.colors[1]:'#cbd5e1'), background: isOk? grad:'#fff', color: isOk? '#fff' : (isIssue? '#ef4444' : '#64748b') } }, isOk ? h(Icon.Check) : (isIssue ? h(Icon.X) : h('span',{style:{fontSize:10,fontWeight:700}},'N/A'))),
             h('button',{ type:'button', 'aria-expanded':openNow, className:'text-left flex-1 select-none', onPointerDown:function(e){ e.preventDefault(); e.stopPropagation(); toggleRow(); }, onClick:function(e){ e.preventDefault(); e.stopPropagation(); }, style:{ background:'transparent', border:0, padding:0, margin:0, cursor:'pointer' } },
@@ -766,7 +882,7 @@
           )
         ); }
 
-      function RowAud(p){ var tabIdx=p.tabIdx, itemIdx=p.itemIdx, item=p.item; var _d2 = useState(item.note||''); var draft=_d2[0]; var setDraft=_d2[1]; var refAud = useRef(null); var selectedCount = Object.values(item.subs||{}).filter(function(v){return !!v;}).length; function nextSubStatus(cur){ var order=['ok','issue','na']; var i=order.indexOf(cur); return order[(i+1+order.length)%order.length]; } function toggleKey(key){ var cur = item.subs && item.subs[key]; var next = nextSubStatus(cur); setAudSub(tabIdx,itemIdx,key,next); } return h('div',{ className:'border rounded-xl p-3 bg-white shadow-sm' },
+      function RowAud(p){ var tabIdx=p.tabIdx, itemIdx=p.itemIdx, item=p.item; var _d2 = useState(item.note||''); var draft=_d2[0]; var setDraft=_d2[1]; var refAud = useRef(null); var selectedCount = Object.values(item.subs||{}).filter(function(v){return !!v;}).length; function nextSubStatus(cur){ var order=['ok','issue','na']; var i=order.indexOf(cur); return order[(i+1+order.length)%order.length]; } function toggleKey(key){ var cur = item.subs && item.subs[key]; var next = nextSubStatus(cur); setAudSub(tabIdx,itemIdx,key,next); } return h('div',{ className:'border rounded-xl p-3 bg-white shadow-sm avoid-break', style:{ pageBreakInside:'avoid', breakInside:'avoid-page' } },
           h('div',{ className:'flex items-start gap-3' }, h('div',{ className:'h-6 w-6 shrink-0 rounded-md border flex items-center justify-center text-slate-500' }, String(itemIdx+1)), h('div',{ className:'text-left flex-1' }, h('div',{ className:'text-[15px] leading-snug font-medium text-slate-800'}, item.q), h('div',{ className:'mt-1 text-xs text-slate-500'}, selectedCount + '/10 checked • ' + (item.note ? 'Has comment' : 'Add comment')) ) ),
           h('div',{ className:'mt-2' },
             h('div',{ className:'grid grid-cols-2 sm:grid-cols-3 gap-2' }, AUD_COLUMNS.map(function(key){ var st = item.subs && item.subs[key]; var isOk = (st==='ok' || st===true); var isIssue = (st==='issue'); return h('div',{ className:'flex items-center gap-2 text-sm select-none' }, h('button',{ type:'button', onPointerDown:function(e){ e.preventDefault(); e.stopPropagation(); toggleKey(key); }, className:'h-5 w-5 rounded-md border flex items-center justify-center', style:{ borderColor: isIssue? '#ef4444' : (isOk? theme.colors[1]:'#cbd5e1'), background: isOk? grad:'#fff', color: isOk? '#fff' : (isIssue? '#ef4444' : '#334155') } }, isOk ? h(Icon.Check) : (isIssue ? h(Icon.X) : h('span',{style:{fontSize:9,fontWeight:700}},'N/A'))), h('span',null,key) ); })),
@@ -824,14 +940,104 @@
         var audDetails = audItems.map(function(it, idx){ var cols = AUD_COLUMNS.filter(function(k){ return it.subs && it.subs[k]==='issue'; }); return { index: idx+1, cols: cols }; }).filter(function(d){ return d.cols.length>0; });
         var audTotal = audDetails.reduce(function(acc,d){ return acc + d.cols.length; }, 0);
         var audPerCol = {}; AUD_COLUMNS.forEach(function(k){ audPerCol[k] = audItems.reduce(function(a,it){ return a + ((it.subs && it.subs[k]==='issue')?1:0); }, 0); });
+        var detailCats = state.answers.filter(function(c){ return c.title!=='Start' && c.title!=='Finish'; });
+
+        function statusChip(status){
+          var s = (status || '').toLowerCase();
+          var palette = {
+            issue: { label:'Issue', bg:'#fee2e2', color:'#b91c1c', border:'#fecaca' },
+            ok: { label:'OK', bg:'#dcfce7', color:'#15803d', border:'#bbf7d0' },
+            na: { label:'N/A', bg:'#e2e8f0', color:'#475569', border:'#cbd5f5' },
+            pending: { label:'Pending', bg:'#fef3c7', color:'#b45309', border:'#fde68a' }
+          };
+          var tone = palette[s] || palette.pending;
+          return h('span',{ className:'inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide', style:{ background:tone.bg, color:tone.color, border:'1px solid '+tone.border } }, tone.label);
+        }
+
+        function renderDetail(cat){
+          if(!cat) return null;
+          if(cat.title==='Auditorium Issues'){
+            var soAud = ensureSignoff(cat.signoff);
+            return h('div',{ key:cat.title, className:'rounded-xl border border-slate-200 bg-slate-50 p-3' },
+              h('div',{ className:'flex flex-wrap items-start justify-between gap-2' },
+                h('div',{ className:'text-base font-semibold text-slate-800' }, cat.title),
+                h('div',{ className:'flex flex-col items-end gap-1 text-xs text-slate-500' },
+                  h('div',{ className:'flex items-center gap-2' }, statusChip(soAud.done ? 'ok' : 'pending'), soAud.done ? h('span',null,'Signed by ', soAud.by || '—') : h('span',{ className:'italic' },'Awaiting sign-off')),
+                  soAud.done && soAud.at ? h('div',{ className:'text-[11px] text-slate-400' }, soAud.at) : null
+                )
+              ),
+              audItems.length ? h('div',{ className:'mt-3 grid gap-2' }, audItems.map(function(it, idx){ var subs = it.subs || {}; var photos = (it.photos && it.photos.length) || 0; return h('div',{ key:'aud-row-'+idx, className:'rounded-lg border border-slate-200 bg-white px-3 py-2' },
+                h('div',{ className:'flex flex-wrap items-center justify-between gap-2' },
+                  h('div',{ className:'text-sm font-semibold text-slate-800' }, it.q || ('Auditorium '+String(idx+1))),
+                  statusChip((Object.values(subs||{}).some(function(v){ return v==='issue'; }) || (it.status==='issue')) ? 'issue' : ((Object.values(subs||{}).some(function(v){ return v==='ok'; }) || it.status==='ok') ? 'ok' : (Object.values(subs||{}).length ? 'pending' : (it.status || 'pending'))))
+                ),
+                h('div',{ className:'mt-2 flex flex-wrap gap-2' }, AUD_COLUMNS.map(function(col){ var st = subs[col]; return h('div',{ key:col, className:'flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-100 px-2 py-1 text-[11px]' }, h('span',{ className:'font-medium text-slate-700' }, col), statusChip(st || 'pending')); })),
+                it.note ? h('div',{ className:'mt-2 text-xs text-slate-600 whitespace-pre-wrap' }, 'Note: ', it.note) : null,
+                photos ? h('div',{ className:'mt-1 text-xs text-slate-500' }, photos+' photo'+(photos===1?'':'s')) : null
+              ); })) : h('div',{ className:'mt-3 text-xs text-slate-500 italic' }, 'No auditoriums configured.')
+            );
+          }
+
+          var so = ensureSignoff(cat.signoff);
+          var items = cat.items || [];
+          var weatherBlock = null;
+          if(cat.title==='Exterior'){
+            var weather = ensureWeather(cat.weather);
+            var selectedWeather = WEATHER_OPTIONS.filter(function(opt){ return weather.conditions && weather.conditions[opt]; });
+            var weatherNote = (weather.note || '').trim();
+            weatherBlock = h('div',{ className:'mt-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600' },
+              h('div',{ className:'text-[13px] font-semibold text-slate-700' }, 'Weather Observations'),
+              selectedWeather.length ? h('div',{ className:'mt-2 flex flex-wrap gap-2' }, selectedWeather.map(function(cond){ return h('span',{ key:cond, className:'inline-flex items-center rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-700' }, cond); })) : h('div',{ className:'mt-2 italic text-slate-500' }, 'No conditions selected'),
+              weatherNote ? h('div',{ className:'mt-2 whitespace-pre-wrap' }, 'Notes: ', weatherNote) : null
+            );
+          }
+
+          return h('div',{ key:cat.title, className:'rounded-xl border border-slate-200 bg-slate-50 p-3' },
+            h('div',{ className:'flex flex-wrap items-start justify-between gap-2' },
+              h('div',{ className:'text-base font-semibold text-slate-800' }, cat.title),
+              h('div',{ className:'flex flex-col items-end gap-1 text-xs text-slate-500' },
+                h('div',{ className:'flex items-center gap-2' }, statusChip(so.done ? 'ok' : 'pending'), so.done ? h('span',null,'Signed by ', so.by || '—') : h('span',{ className:'italic' },'Awaiting sign-off')),
+                so.done && so.at ? h('div',{ className:'text-[11px] text-slate-400' }, so.at) : null
+              )
+            ),
+            weatherBlock,
+            items.length ? h('div',{ className:'mt-3 grid gap-2' }, items.map(function(item, idx){ var photosCount = (item.photos && item.photos.length) || 0; return h('div',{ key:cat.title+'-'+idx, className:'rounded-lg border border-slate-200 bg-white px-3 py-2' },
+              h('div',{ className:'flex flex-wrap items-center justify-between gap-2' },
+                h('div',{ className:'text-sm font-medium text-slate-800' }, String(idx+1)+'. '+item.q),
+                statusChip(item.status || 'pending')
+              ),
+              item.note ? h('div',{ className:'mt-1 text-xs text-slate-600 whitespace-pre-wrap' }, 'Note: ', item.note) : null,
+              photosCount ? h('div',{ className:'mt-1 text-xs text-slate-500' }, photosCount+' photo'+(photosCount===1?'':'s')) : null
+            ); })) : h('div',{ className:'mt-3 text-xs text-slate-500 italic' }, 'No checklist items recorded.')
+          );
+        }
         return h('div',{ className:'max-w-3xl mx-auto grid gap-3' },
           h('div',{ className:'bg-white border rounded-2xl p-4 shadow-sm flex items-center gap-4' }, h(Donut,{ pct: (function(){ var done = state.answers.filter(function(c){return c.title!=='Start' && c.signoff && c.signoff.done;}).length; var total = state.answers.filter(function(c){return c.title!=='Start';}).length; return total? Math.round(done/total*100):0; })() }), h('div',{ className:'flex-1' }, h('div',{ className:'text-xl font-bold text-slate-800' }, 'Completion'), h('div',{ className:'text-slate-600' }, (function(){ var done = state.answers.filter(function(c){return c.title!=='Start' && c.signoff && c.signoff.done;}).length; var total = state.answers.filter(function(c){return c.title!=='Start';}).length; return done+' / '+total+' pages complete'; })()), h('div',{ className:'mt-2 h-3 w-full rounded-full bg-slate-200 overflow-hidden' }, h('div',{ className:'h-3', style:{ width: (function(){ var done = state.answers.filter(function(c){return c.title!=='Start' && c.signoff && c.signoff.done;}).length; var total = state.answers.filter(function(c){return c.title!=='Start';}).length; return total? Math.round(done/total*100):0; })()+'%', background: grad } })))) ,
-          h('div',{ className:'bg-white border rounded-2xl p-4 shadow-sm' }, h('div',{ className:'text-sm font-semibold text-slate-600 mb-2' }, 'Issues Summary'), h('div',{ className:'grid grid-cols-1 sm:grid-cols-2 gap-2' }, simple.map(function(row){ return h('div',{ className:'flex items-center justify-between text-sm text-slate-700 border rounded-md px-2 py-1 bg-white' }, h('span',null,row.title), h('span',{ className: row.count ? 'text-red-600 font-semibold' : 'text-slate-500' }, String(row.count)+' issue'+(row.count===1?'':'s')) ); })), (audTab ? h('div',{ className:'mt-3' }, h('div',{ className:'text-sm font-semibold text-slate-600 mb-1' }, 'Auditorium Issues'), h('div',{ className:'text-sm text-slate-700' }, (audTotal||0)+' issue'+(audTotal===1?'':'s')+' across '+audItems.length+' auditorium'+(audItems.length===1?'':'s')), h('div',{ className:'mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2' }, AUD_COLUMNS.map(function(k){ var c = audPerCol[k]||0; return h('div',{ className:'text-xs border rounded px-2 py-1 bg-white flex items-center justify-between' }, h('span',null,k), h('span',{ className: c ? 'text-red-600 font-semibold' : 'text-slate-500' }, String(c)) ); })), audDetails.length ? h('div',{ className:'mt-2 text-xs text-slate-600' }, audDetails.map(function(d){ return h('div',{ className:'border rounded-md px-2 py-1 bg-white mb-1' }, 'Auditorium ', String(d.index), ': ', d.cols.join(', ')); })) : null ) : null) ), h('div',{ className:'bg-white border rounded-2xl p-4 shadow-sm' }, h('div',{ className:'text-sm font-semibold text-slate-600 mb-2' }, 'Pages remaining'), remaining.length ? h('ul', { className:'list-disc pl-5 space-y-1 text-slate-700' }, remaining.map(function(r){ return h('li', null, r.name); })) : h('div',{ className:'text-emerald-700' }, 'All set! You can email or print now.') ) ); }
+          h('div',{ className:'bg-white border rounded-2xl p-4 shadow-sm' }, h('div',{ className:'text-sm font-semibold text-slate-600 mb-2' }, 'Issues Summary'), h('div',{ className:'grid grid-cols-1 sm:grid-cols-2 gap-2' }, simple.map(function(row){ return h('div',{ className:'flex items-center justify-between text-sm text-slate-700 border rounded-md px-2 py-1 bg-white' }, h('span',null,row.title), h('span',{ className: row.count ? 'text-red-600 font-semibold' : 'text-slate-500' }, String(row.count)+' issue'+(row.count===1?'':'s')) ); })), (audTab ? h('div',{ className:'mt-3' }, h('div',{ className:'text-sm font-semibold text-slate-600 mb-1' }, 'Auditorium Issues'), h('div',{ className:'text-sm text-slate-700' }, (audTotal||0)+' issue'+(audTotal===1?'':'s')+' across '+audItems.length+' auditorium'+(audItems.length===1?'':'s')), h('div',{ className:'mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2' }, AUD_COLUMNS.map(function(k){ var c = audPerCol[k]||0; return h('div',{ className:'text-xs border rounded px-2 py-1 bg-white flex items-center justify-between' }, h('span',null,k), h('span',{ className: c ? 'text-red-600 font-semibold' : 'text-slate-500' }, String(c)) ); })), audDetails.length ? h('div',{ className:'mt-2 text-xs text-slate-600' }, audDetails.map(function(d){ return h('div',{ className:'border rounded-md px-2 py-1 bg-white mb-1' }, 'Auditorium ', String(d.index), ': ', d.cols.join(', ')); })) : null ) : null) ), h('div',{ className:'bg-white border rounded-2xl p-4 shadow-sm' }, h('div',{ className:'text-sm font-semibold text-slate-600 mb-2' }, 'Detailed Page Overview'), h('div',{ className:'grid gap-3' }, detailCats.map(renderDetail)) ), h('div',{ className:'bg-white border rounded-2xl p-4 shadow-sm' }, h('div',{ className:'text-sm font-semibold text-slate-600 mb-2' }, 'Pages remaining'), remaining.length ? h('ul', { className:'list-disc pl-5 space-y-1 text-slate-700' }, remaining.map(function(r){ return h('li', null, r.name); })) : h('div',{ className:'text-emerald-700' }, 'All set! You can email or print now.') ) ); }
 
       /* ---------- Header, Body, Pager ---------- */
-      function Header(){ var themeButtons = THEMES.map(function(t){ return h('button',{ title:t.name, onPointerDown:function(e){ e.preventDefault(); setThemeKey(t.key); }, className:'h-6 w-6 rounded-full border', style:{ background:t.dot, borderColor: state.theme===t.key? theme.colors[1]:'#e5e7eb', boxShadow: state.theme===t.key? ('0 0 0 3px '+theme.colors[0]+'44') : 'none' } }); }); var actionBar = null; if(activeCat.title==='Start' || activeCat.title==='Finish'){ actionBar = h('div',{ className:'mt-2 flex items-center gap-2 max-w-3xl mx-auto'}, h('button',{ title:'Email (Text)', onPointerDown:function(){ if(!canFinishActions) return; var subject='TFI Inspection - '+(state.meta.theatreName||'Site')+' - '+new Date().toLocaleDateString(); var body=buildTextReport(state); var url='mailto:?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body); var a=document.createElement('a'); a.href=url; a.click(); }, className:'rounded-lg px-3 py-2 text-sm flex items-center gap-1 btn-fill', style:{ background: canFinishActions? grad:'#94a3b8', opacity: canFinishActions?1:.5 }, disabled:!canFinishActions }, h(Icon.Mail),'Email (Text)'), h('button',{ title:'Email (HTML — copied to clipboard)', onPointerDown: async function(){ if(!canFinishActions) return; var subject='TFI Inspection - '+(state.meta.theatreName||'Site')+' - '+new Date().toLocaleDateString(); var html = buildHtmlReport(state, false); var copied=false; try{ if('ClipboardItem' in window){ var ci = new ClipboardItem({ 'text/html': new Blob([html], { type:'text/html' }) }); await navigator.clipboard.write([ci]); } else { await navigator.clipboard.writeText(html); } copied=true; }catch(e){} var note = copied ? '\n\n(HTML report copied to clipboard — paste it into your email.)' : '\n\n(If paste fails, export HTML from the app and attach.)'; var fallback = buildTextReport(state) + note; var url='mailto:?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(fallback); var a=document.createElement('a'); a.href=url; a.click(); }, className:'rounded-lg px-3 py-2 text-sm flex items-center gap-1 btn-fill', style:{ background: canFinishActions? grad:'#94a3b8', opacity: canFinishActions?1:.5 }, disabled:!canFinishActions }, h(Icon.Mail),'Email (HTML)'), h('button',{ title:'Export to PDF', onPointerDown: async function(){ if(!canFinishActions) return; await flushDrafts(); var reportContent = buildHtmlReport(state, true); var theatre = state.meta.theatreName || 'Report'; var date = new Date().toISOString().slice(0, 10); var filename = 'TFI-' + theatre.replace(/[^a-z0-9]/gi, '-') + '-' + date + '.pdf'; var options = { margin: 0.5, filename: filename, image: { type: 'jpeg', quality: 0.95 }, html2canvas: { scale: 2, useCORS: true }, jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }, pagebreak: { mode: 'avoid-all' } }; var originalScrollY = window.scrollY; window.scrollTo(0, 0); setTimeout(function(){ html2pdf().from(reportContent).set(options).save().finally(function(){ window.scrollTo(0, originalScrollY); }); }, 100); }, className:'rounded-lg px-3 py-2 text-sm flex items-center gap-1 btn-fill', style:{ background: canFinishActions? grad:'#94a3b8', opacity: canFinishActions?1:.5 }, disabled:!canFinishActions }, h(Icon.Printer),'Export PDF'), h('button',{ title:'Send to SP', onPointerDown: async function(){ await flushDrafts(); await sendJsonPlusPdfAndTxt(state); }, className:'rounded-lg px-3 py-2 text-sm flex items-center gap-1 btn-fill', style:{ background: canFinishActions? grad:'#94a3b8', opacity: canFinishActions?1:.6 }, disabled:!canFinishActions }, 'Send to SP'), (activeCat.title==='Start' ? h('button',{ title:'Reset all', onPointerDown:function(){ if(confirm('Reset all checks, photos, and comments? (Start page fields preserved except Manager Name.)')){ setState(function(s){ return { theme:s.theme, activeTab:0, answers:buildAnswers(baseCategories), meta:Object.assign({}, s.meta, { managerName:'' }), openPath:null }; }); } }, className:'rounded-lg px-3 py-2 text-sm flex items-center gap-1 btn-outline border text-red-600' }, h(Icon.Trash2),'Reset') : null) ); } var gatedNote = (!canFinishActions && (activeCat.title==='Start' || activeCat.title==='Finish')) ? h('div',{ className:'max-w-3xl mx-auto mt-1 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-1' }, 'Complete all pages to enable Email and Print.') : null; return h('div', { className:'sticky top-0 z-10 px-3 pt-3 pb-2 print:hidden', style:{ background:'linear-gradient(180deg, rgba(255,255,255,.95), rgba(255,255,255,.75))', backdropFilter:'blur(8px)'} }, h('div', { className:'flex items-center gap-2'}, h('div',{ className:'font-semibold text-slate-800 flex items-center gap-2'}, h(Icon.Palette), 'TFI Inspection'), h('div',{ className:'ml-auto flex items-center gap-2'}, themeButtons) ), h('div',{ className:'mt-2'}, h('div',{ className:'max-w-3xl mx-auto'}, h('label',{ className:'block text-xs font-semibold text-slate-500 mb-1', htmlFor:'sectionSel'},'Section'), h('div',{ className:'relative' }, h('select',{ id:'sectionSel', value:activeTab, onChange:function(e){ goTo(parseInt(e.target.value,10)); }, className:'w-full rounded-xl px-3 py-3 pr-10 text-[15px] font-semibold btn-fill', style:{ background: grad, color:'#fff' } }, state.answers.map(function(cat,idx){ return h('option',{ value:idx, style:{ color:'#0f172a', background:'#fff' }}, cat.title); })), h('div',{ className:'pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-white'}, h(Icon.ChevronDown)) ) ) ), actionBar, gatedNote ); }
+      function Header(){ var themeButtons = THEMES.map(function(t){ return h('button',{ title:t.name, onPointerDown:function(e){ e.preventDefault(); setThemeKey(t.key); }, className:'h-6 w-6 rounded-full border', style:{ background:t.dot, borderColor: state.theme===t.key? theme.colors[1]:'#e5e7eb', boxShadow: state.theme===t.key? ('0 0 0 3px '+theme.colors[0]+'44') : 'none' } }); }); var actionBar = null; if(activeCat.title==='Start' || activeCat.title==='Finish'){ actionBar = h('div',{ className:'mt-2 flex items-center gap-2 max-w-3xl mx-auto', 'data-export-card': true}, h('button',{ title:'Email (Text)', onPointerDown:function(){ if(!canFinishActions) return; var subject='TFI Inspection - '+(state.meta.theatreName||'Site')+' - '+new Date().toLocaleDateString(); var body=buildTextReport(state); var url='mailto:?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body); var a=document.createElement('a'); a.href=url; a.click(); }, className:'rounded-lg px-3 py-2 text-sm flex items-center gap-1 btn-fill', style:{ background: canFinishActions? grad:'#94a3b8', opacity: canFinishActions?1:.5 }, disabled:!canFinishActions }, h(Icon.Mail),'Email (Text)'), h('button',{ title:'Email (HTML — copied to clipboard)', onPointerDown: async function(){ if(!canFinishActions) return; var subject='TFI Inspection - '+(state.meta.theatreName||'Site')+' - '+new Date().toLocaleDateString(); var html = buildHtmlReport(state, false); var copied=false; try{ if('ClipboardItem' in window){ var ci = new ClipboardItem({ 'text/html': new Blob([html], { type:'text/html' }) }); await navigator.clipboard.write([ci]); } else { await navigator.clipboard.writeText(html); } copied=true; }catch(e){} var note = copied ? '\n\n(HTML report copied to clipboard — paste it into your email.)' : '\n\n(If paste fails, export HTML from the app and attach.)'; var fallback = buildTextReport(state) + note; var url='mailto:?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(fallback); var a=document.createElement('a'); a.href=url; a.click(); }, className:'rounded-lg px-3 py-2 text-sm flex items-center gap-1 btn-fill', style:{ background: canFinishActions? grad:'#94a3b8', opacity: canFinishActions?1:.5 }, disabled:!canFinishActions }, h(Icon.Mail),'Email (HTML)'), h('button',{ title:'Export to PDF', onPointerDown: async function(){ if(!canFinishActions) return; await flushDrafts(); var reportContent = buildHtmlReport(state, true); var theatre = state.meta.theatreName || 'Report'; var date = new Date().toISOString().slice(0, 10); var filename = 'TFI-' + theatre.replace(/[^a-z0-9]/gi, '-') + '-' + date + '.pdf'; var options = { margin: 0.5, filename: filename, image: { type: 'jpeg', quality: 0.95 }, html2canvas: { scale: 2, useCORS: true }, jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }, pagebreak: { mode: 'avoid-all' } }; var originalScrollY = window.scrollY; window.scrollTo(0, 0); setTimeout(function(){ html2pdf().from(reportContent).set(options).save().finally(function(){ window.scrollTo(0, originalScrollY); }); }, 100); }, className:'rounded-lg px-3 py-2 text-sm flex items-center gap-1 btn-fill', style:{ background: canFinishActions? grad:'#94a3b8', opacity: canFinishActions?1:.5 }, disabled:!canFinishActions }, h(Icon.Printer),'Export PDF'), (activeCat.title==='Finish' ? h('button',{ title:'Export Finish (Exact)', onPointerDown: async function(){ if(!canFinishActions) return; await flushDrafts(); await exportFinishAsPdfExact(); }, className:'rounded-lg px-3 py-2 text-sm flex items-center gap-1 btn-fill', style:{ background: canFinishActions? grad:'#94a3b8', opacity: canFinishActions?1:.5 }, disabled:!canFinishActions }, h(Icon.Printer),'Export Finish (Exact)') : null), h('button',{ title:'Send to SP', onPointerDown: async function(){ await flushDrafts(); await sendJsonPlusPdfAndTxt(state); }, className:'rounded-lg px-3 py-2 text-sm flex items-center gap-1 btn-fill', style:{ background: canFinishActions? grad:'#94a3b8', opacity: canFinishActions?1:.6 }, disabled:!canFinishActions }, 'Send to SP'), (activeCat.title==='Start' ? h('button',{ title:'Reset all', onPointerDown:function(){ if(confirm('Reset all checks, photos, and comments? (Start page fields preserved except Manager Name.)')){ setState(function(s){ return { theme:s.theme, activeTab:0, answers:buildAnswers(baseCategories), meta:Object.assign({}, s.meta, { managerName:'' }), openPath:null }; }); } }, className:'rounded-lg px-3 py-2 text-sm flex items-center gap-1 btn-outline border text-red-600' }, h(Icon.Trash2),'Reset') : null) ); } var gatedNote = (!canFinishActions && (activeCat.title==='Start' || activeCat.title==='Finish')) ? h('div',{ className:'max-w-3xl mx-auto mt-1 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-1' }, 'Complete all pages to enable Email and Print.') : null; return h('div', { className:'sticky top-0 z-10 px-3 pt-3 pb-2 print:hidden', style:{ background:'linear-gradient(180deg, rgba(255,255,255,.95), rgba(255,255,255,.75))', backdropFilter:'blur(8px)'} }, h('div', { className:'flex items-center gap-2'}, h('div',{ className:'font-semibold text-slate-800 flex items-center gap-2'}, h(Icon.Palette), 'TFI Inspection'), h('div',{ className:'ml-auto flex items-center gap-2'}, themeButtons) ), h('div',{ className:'mt-2'}, h('div',{ className:'max-w-3xl mx-auto'}, h('label',{ className:'block text-xs font-semibold text-slate-500 mb-1', htmlFor:'sectionSel'},'Section'), h('div',{ className:'relative' }, h('select',{ id:'sectionSel', value:activeTab, onChange:function(e){ goTo(parseInt(e.target.value,10)); }, className:'w-full rounded-xl px-3 py-3 pr-10 text-[15px] font-semibold btn-fill', style:{ background: grad, color:'#fff' } }, state.answers.map(function(cat,idx){ return h('option',{ value:idx, style:{ color:'#0f172a', background:'#fff' }}, cat.title); })), h('div',{ className:'pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-white'}, h(Icon.ChevronDown)) ) ) ), actionBar, gatedNote ); }
 
-      function PageBody(){ if(activeCat.title==='Start') return h(StartPage); if(activeCat.title==='Finish') return h('div',null, h(FinishPage), h(SignOffBlock,{ tabIdx: activeTab })); if(activeCat.title==='Auditorium Issues'){ var audCount = Math.max(0, parseInt(state.meta.auditoriumCount||'0',10)||0) || activeCat.items.length; var itemsToShow = activeCat.items.slice(0, audCount); return h('div', null, h('div',{ className:'max-w-3xl mx-auto grid gap-3' }, itemsToShow.map(function(item,i){ return h(RowAud,{ tabIdx:activeTab, itemIdx:i, item:item }); })), h(SignOffBlock,{ tabIdx: activeTab }) ); } return h('div', null, h('div',{ className:'max-w-3xl mx-auto grid gap-3' }, activeCat.items.map(function(item,i){ return h(Row,{ tabIdx:activeTab, itemIdx:i, item:item }); })), h(SignOffBlock,{ tabIdx: activeTab }) ); }
+      function PageBody(){
+        if(activeCat.title==='Start') return h(StartPage);
+        if(activeCat.title==='Finish') return h('div',{ ref: finishRef }, h(FinishPage), h(SignOffBlock,{ tabIdx: activeTab }));
+        if(activeCat.title==='Auditorium Issues'){
+          var audCount = Math.max(0, parseInt(state.meta.auditoriumCount||'0',10)||0) || activeCat.items.length;
+          var itemsToShow = activeCat.items.slice(0, audCount);
+          return h('div', null,
+            h('div',{ className:'max-w-3xl mx-auto grid gap-3' }, itemsToShow.map(function(item,i){ return h(RowAud,{ tabIdx:activeTab, itemIdx:i, item:item }); })),
+            h(SignOffBlock,{ tabIdx: activeTab })
+          );
+        }
+        var rows = activeCat.items.map(function(item,i){ return h(Row,{ tabIdx:activeTab, itemIdx:i, item:item }); });
+        if(activeCat.title==='Exterior'){
+          rows.unshift(h(WeatherBlock,{ key:'weather-block', tabIdx:activeTab, weather: activeCat.weather }));
+        }
+        return h('div', null,
+          h('div',{ className:'max-w-3xl mx-auto grid gap-3' }, rows),
+          h(SignOffBlock,{ tabIdx: activeTab })
+        );
+      }
 
       function Pager(){ return h('div',{ className:'print:hidden sticky bottom-0 inset-x-0 pb-3 px-3' }, h('div',{ className:'max-w-3xl mx-auto bg-white/90 backdrop-blur border rounded-2xl shadow-sm p-2 flex items-center gap-2' }, h('button',{ className:'flex-1 rounded-xl px-4 py-3 text-sm font-semibold btn-fill', style:{ background: grad, opacity: activeTab<=0? 0.5:1 }, disabled: activeTab<=0, onPointerDown:function(){ prevTab(); } }, h('div',{ className:'flex items-center justify-center gap-2' }, h(Icon.ChevronLeft), 'Previous')), h('div',{ className:'w-px h-8 bg-slate-200' }), h('button',{ className:'flex-1 rounded-xl px-4 py-3 text-sm font-semibold btn-fill', style:{ background: grad, opacity: activeTab>=state.answers.length-1? 0.5:1 }, disabled: activeTab>=state.answers.length-1, onPointerDown:function(){ nextTab(); } }, h('div',{ className:'flex items-center justify-center gap-2' }, 'Next', h(Icon.ChevronRight))) ) ); }
 
